@@ -1,0 +1,25 @@
+[
+  {
+    "id": "user_1",
+    "email": "student@example.com",
+    "passwordHash": "$2b$10$example_hash_here",
+    "fullName": "John Doe",
+    "university": "univ_1",
+    "campus": "campus_1",
+    "yearOfStudy": "Year 1",
+    "role": "student",
+    "createdAt": "2024-01-10T08:00:00Z"
+  },
+  {
+    "id": "user_b16c114efb2b07d0",
+    "email": "kiprotichlevy0@gmail.com",
+    "passwordHash": "$2b$10$i.5TOlUQZ/II/6TTikkhC.0.gutWVghV7.TEi55PItENjSLUKES3i",
+    "fullName": "levy kiprotich",
+    "university": "univ_1",
+    "campus": "campus_1",
+    "yearOfStudy": "Year 1",
+    "role": "student",
+    "createdAt": "2026-06-10T14:58:33.973Z",
+    "phone": "254718690760"
+  }
+]

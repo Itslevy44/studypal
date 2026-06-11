@@ -1,0 +1,13 @@
+[
+  {
+    "id": "sub_1",
+    "userId": "user_1",
+    "paperId": "paper_1",
+    "purchaseDate": "2024-01-20T15:30:00Z",
+    "expiryDate": "2024-02-20T15:30:00Z",
+    "cost": 50,
+    "status": "active",
+    "paymentMethod": "mpesa",
+    "mpesaTransactionId": "ABC123DEF456"
+  }
+]

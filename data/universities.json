@@ -1,0 +1,45 @@
+[
+  {
+    "id": "univ_1",
+    "name": "Egerton University",
+    "campuses": [
+      {
+        "id": "campus_1",
+        "name": "Main Campus",
+        "location": "Nakuru"
+      },
+      {
+        "id": "campus_2",
+        "name": "Nairobi Campus",
+        "location": "Nairobi"
+      }
+    ]
+  },
+  {
+    "id": "univ_2",
+    "name": "University of Nairobi",
+    "campuses": [
+      {
+        "id": "campus_3",
+        "name": "Nairobi Campus",
+        "location": "Nairobi"
+      },
+      {
+        "id": "campus_4",
+        "name": "Kikuyu Campus",
+        "location": "Kiambu"
+      }
+    ]
+  },
+  {
+    "id": "univ_3",
+    "name": "Kenyatta University",
+    "campuses": [
+      {
+        "id": "campus_5",
+        "name": "Main Campus",
+        "location": "Nairobi"
+      }
+    ]
+  }
+]
