@@ -1,11 +1,52 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
 
-const dataDir = path.join(process.cwd(), 'data');
+const packagedDataDir = path.join(process.cwd(), 'data');
 
-// Ensure data directory exists
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Determine a writable data directory. In serverless environments the project
+// directory (e.g. /var/task) may be read-only. Use a runtime temp dir if so.
+const runtimeDataDir = process.env.RUNTIME_DATA_DIR || path.join(os.tmpdir(), 'study-pal-data');
+
+let dataDir = packagedDataDir;
+
+const ensureDir = (dir: string) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
+
+// If packaged data dir is writable use it. Otherwise fall back to runtimeDataDir
+try {
+  // Try to write a small temp file to verify writability
+  ensureDir(packagedDataDir);
+  const testPath = path.join(packagedDataDir, '.write_test');
+  fs.writeFileSync(testPath, 'ok');
+  fs.unlinkSync(testPath);
+  dataDir = packagedDataDir;
+} catch (err) {
+  // Packaged dir not writable — copy files to runtime dir on first run
+  dataDir = runtimeDataDir;
+  ensureDir(dataDir);
+
+  try {
+    const files = fs.readdirSync(packagedDataDir);
+    for (const f of files) {
+      const src = path.join(packagedDataDir, f);
+      const dest = path.join(dataDir, f);
+      if (!fs.existsSync(dest)) {
+        try {
+          fs.copyFileSync(src, dest);
+        } catch (copyErr) {
+          // ignore copy errors for missing files
+        }
+      }
+    }
+  } catch (readErr) {
+    // packaged data dir may not exist or be unreadable — ensure runtime dir exists
+    ensureDir(dataDir);
+  }
 }
 
 // Generic file-based data store
@@ -22,7 +63,55 @@ export const readJsonFile = (filename: string) => {
 
 export const writeJsonFile = (filename: string, data: any) => {
   const filePath = path.join(dataDir, filename);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error(`Failed to write ${filePath}:`, err);
+    throw err;
+  }
+};
+
+// If GITHUB_PAT is provided and GITHUB_BACKED_STORE is enabled, commit and push
+const shouldUseGithub = !!process.env.GITHUB_PAT || process.env.GITHUB_BACKED_STORE === '1';
+
+const commitAndPushFile = (filePath: string, filename: string) => {
+  if (!shouldUseGithub) return;
+
+  try {
+    const repoUrlBuffer = execSync('git config --get remote.origin.url', { encoding: 'utf8' });
+    let repoUrl = (repoUrlBuffer || '').trim();
+    if (!repoUrl) return;
+
+    const branchBuffer = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' });
+    const branch = (branchBuffer || 'main').trim();
+
+    const githubPat = process.env.GITHUB_PAT || '';
+
+    // Stage the file
+    execSync(`git add "${filePath}"`);
+
+    // Commit (ignore if no changes)
+    try {
+      execSync(`git commit -m "data: update ${filename}" --no-verify`, { stdio: 'ignore' });
+    } catch (commitErr) {
+      // nothing to commit
+    }
+
+    // Push using authenticated URL if PAT available
+    if (githubPat) {
+      // construct authenticated URL safely
+      if (repoUrl.startsWith('https://')) {
+        const authUrl = repoUrl.replace('https://', `https://${githubPat}@`);
+        execSync(`git push "${authUrl}" HEAD:${branch}`);
+      } else {
+        execSync(`git push origin ${branch}`);
+      }
+    } else {
+      execSync(`git push origin ${branch}`);
+    }
+  } catch (err) {
+    console.error('Failed to commit/push data file to GitHub:', err instanceof Error ? err.message : err);
+  }
 };
 
 // Universities operations
