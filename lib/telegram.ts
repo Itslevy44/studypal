@@ -5,6 +5,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 export interface TelegramUploadResult {
   success: boolean;
   messageId?: string;
+  fileId?: string;
   error?: string;
 }
 
@@ -63,11 +64,14 @@ export const uploadToTelegram = async (
       };
     }
 
-    console.log('[Telegram Upload] Success! Message ID:', result.result.message_id);
+    const doc = result.result?.document;
+    const fileId = doc?.file_id;
+    console.log('[Telegram Upload] Success! Message ID:', result.result.message_id, 'File ID:', fileId);
     
     return {
       success: true,
       messageId: result.result.message_id.toString(),
+      fileId: fileId,
     };
   } catch (error: any) {
     console.error('[Telegram Upload] Exception:', {
@@ -87,17 +91,42 @@ export const getFileFromTelegram = async (
   messageId: string
 ): Promise<TelegramFileInfo | null> => {
   try {
+    // Note: Since standard Telegram Bot API does not provide a direct getMessage method,
+    // we use forwardMessage to self as a robust workaround to retrieve the message payload.
     const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMessage?chat_id=${TELEGRAM_CHAT_ID}&message_id=${messageId}`
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/forwardMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          from_chat_id: TELEGRAM_CHAT_ID,
+          message_id: parseInt(messageId),
+          disable_notification: true,
+        }),
+      }
     );
 
     const result = await response.json();
 
-    if (!result.ok || !result.result.document) {
+    if (!result.ok || !result.result?.document) {
+      console.warn('[Telegram GetFile] Failed to forward/fetch message info:', result);
       return null;
     }
 
     const doc = result.result.document;
+    const forwardMessageId = result.result.message_id;
+
+    // Asynchronously delete the forwarded message to keep the chat clean
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        message_id: forwardMessageId,
+      }),
+    }).catch((err) => console.error('[Telegram GetFile] Failed to delete forwarded message:', err));
+
     return {
       fileId: doc.file_id,
       fileSize: doc.file_size,

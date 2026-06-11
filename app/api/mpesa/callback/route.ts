@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { addSubscription, getUsers, writeJsonFile } from '@/lib/dataStore';
+import { addSubscription, getUsers, writeJsonFile, readJsonFile } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -21,39 +21,66 @@ export async function POST(req: Request) {
 
       console.log(`[M-Pesa] ✅ Payment success | Receipt: ${receiptNumber} | Amount: KES ${amount} | Phone: ${phoneNumber} | RequestID: ${checkoutRequestID}`);
 
-      // The AccountReference we set was the first 10 chars of the paperId
-      // Find which paper this payment was for (we store it in the reference)
-      // The checkoutRequestID maps to a pending transaction stored in session.
-      // Since we don't have a session store, we record the payment against the phone.
-      const paperId = stkCallback.AccountReference || null; // We pass paper.id.substring(0,10) — use as partial ID
+      // Read pending payments mapping CheckoutRequestID -> { userId, paperId }
+      const pendingPayments = readJsonFile('pending_payments.json') || [];
+      const pendingIdx = pendingPayments.findIndex((p: any) => p.checkoutRequestId === checkoutRequestID);
+      
+      let matchedUserId = null;
+      let matchedPaperId = null;
+
+      if (pendingIdx !== -1) {
+        const pending = pendingPayments[pendingIdx];
+        matchedUserId = pending.userId;
+        matchedPaperId = pending.paperId;
+        // Remove from pending list
+        pendingPayments.splice(pendingIdx, 1);
+        writeJsonFile('pending_payments.json', pendingPayments);
+        console.log(`[M-Pesa] Match found in pending_payments for request: ${checkoutRequestID}. User: ${matchedUserId}, Paper: ${matchedPaperId}`);
+      }
+
+      // Try to find user by phone number as a fallback if not found in pending
+      let matchedUserIdFinal = matchedUserId;
+      if (!matchedUserIdFinal && phoneNumber) {
+        const allUsers: any[] = getUsers();
+        const normalizedPhone = phoneNumber.replace(/^\+?254/, '0');
+        const matchedUserByPhone = allUsers.find((u: any) => {
+          const uPhone = String(u.phone || '').replace(/^\+?254/, '0');
+          return uPhone === normalizedPhone;
+        });
+        if (matchedUserByPhone) {
+          matchedUserIdFinal = matchedUserByPhone.id;
+        }
+      }
+
+      // Fallback paperId from AccountReference if missing from pending
+      const paperId = matchedPaperId || stkCallback.AccountReference || null;
 
       // Create a subscription record to grant access
       const expiryDate = new Date();
       expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year access
 
-      // Try to find user by phone number
-      const allUsers: any[] = getUsers();
-      const normalizedPhone = phoneNumber.replace(/^\+?254/, '0');
-      const matchedUser = allUsers.find((u: any) => {
-        const uPhone = String(u.phone || '').replace(/^\+?254/, '0');
-        return uPhone === normalizedPhone;
-      });
+      if (matchedUserIdFinal && paperId) {
+        // Resolve full paperId if it was a partial substring
+        const papers = readJsonFile('papers.json') || [];
+        const matchedPaper = papers.find((p: any) => p.id === paperId || p.id.startsWith(paperId));
+        const finalPaperId = matchedPaper ? matchedPaper.id : paperId;
 
-      if (matchedUser && paperId) {
         addSubscription({
           id: `sub_${Date.now()}`,
-          userId: matchedUser.id,
-          paperId: paperId, // partial ID — improve by using full paper lookup if needed
+          userId: matchedUserIdFinal,
+          paperId: finalPaperId,
           status: 'active',
           expiryDate: expiryDate.toISOString(),
           receiptNumber,
           amount,
           createdAt: new Date().toISOString(),
         });
-        console.log(`[M-Pesa] ✅ Subscription created for user ${matchedUser.email}`);
+        
+        // Find user email for logging if possible
+        const fullUser = getUsers().find((u: any) => u.id === matchedUserIdFinal);
+        console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${finalPaperId}`);
       } else {
-        // Record payment without linking to user (can be reconciled manually)
-        console.warn(`[M-Pesa] ⚠️ Could not match phone ${phoneNumber} to a user. Payment recorded but not linked.`);
+        console.warn(`[M-Pesa] ⚠️ Could not match transaction ${checkoutRequestID} to a user or paper. User: ${matchedUserIdFinal}, Paper: ${paperId}`);
       }
 
     } else {

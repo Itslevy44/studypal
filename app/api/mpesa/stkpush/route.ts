@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getMpesaToken, generatePassword, generateTimestamp } from '@/lib/mpesa';
 import { verifyRequestToken } from '@/lib/auth';
-import { getUsers, getUserById, writeJsonFile } from '@/lib/dataStore';
+import { getUsers, getUserById, writeJsonFile, readJsonFile, getPapers } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -75,6 +75,28 @@ export async function POST(req: Request) {
         { error: data.errorMessage || 'STK push failed' },
         { status: response.status }
       );
+    }
+
+    // Record the pending transaction mapping CheckoutRequestID -> { userId, paperId }
+    if (data.CheckoutRequestID) {
+      try {
+        const papers = getPapers() || [];
+        const matchedPaper = papers.find((p: any) => p.id === accountReference || p.id.startsWith(accountReference));
+        const paperId = matchedPaper ? matchedPaper.id : (accountReference || 'unknown');
+
+        const pendingPayments = readJsonFile('pending_payments.json') || [];
+        pendingPayments.push({
+          checkoutRequestId: data.CheckoutRequestID,
+          userId: decoded?.userId || null,
+          paperId: paperId,
+          amount: amount,
+          createdAt: new Date().toISOString(),
+        });
+        writeJsonFile('pending_payments.json', pendingPayments);
+        console.log(`[M-Pesa] Pending payment stored: RequestID: ${data.CheckoutRequestID} | User: ${decoded?.userId} | Paper: ${paperId}`);
+      } catch (err) {
+        console.error('[M-Pesa] Failed to record pending payment:', err);
+      }
     }
 
     return NextResponse.json({

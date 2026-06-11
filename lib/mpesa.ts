@@ -13,22 +13,31 @@ export async function getMpesaToken() {
 
   try {
     const response = await fetch(url, {
+      method: 'GET',
       headers: {
         Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
       },
-      next: { revalidate: 3500 } // Cache token, they expire in 1 hour
+      cache: 'no-store', // always fetch fresh token — caching can cause stale/error responses
     });
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('M-Pesa auth failed:', errorText);
-      throw new Error(`M-Pesa Authentication failed: ${response.status}`);
+      console.error('[M-Pesa] Auth failed. Status:', response.status, 'Body:', errorText);
+      throw new Error(`M-Pesa Authentication failed: ${response.status} — ${errorText}`);
     }
 
     const data = await response.json();
+
+    if (!data.access_token) {
+      console.error('[M-Pesa] Auth response missing access_token:', JSON.stringify(data));
+      throw new Error('M-Pesa returned no access token');
+    }
+
+    console.log('[M-Pesa] Token obtained successfully');
     return data.access_token;
   } catch (error) {
-    console.error('Error getting M-Pesa token:', error);
+    console.error('[M-Pesa] Error getting token:', error);
     throw error;
   }
 }

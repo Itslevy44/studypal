@@ -71,10 +71,10 @@ export default function StudentRegisterPage() {
     }
   };
 
-  const inputClass = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm';
+  const inputClass = 'w-full bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-indigo-300 transition-all text-sm font-medium';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-fuchsia-50 flex flex-col">
       <div className="h-1 bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-cyan-500" />
 
       <div className="flex-1 flex items-center justify-center p-6 py-12">
@@ -95,8 +95,8 @@ export default function StudentRegisterPage() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900">StudyPal</h1>
-                <p className="text-xs text-slate-400">Create your account</p>
+                <h1 className="text-xl font-black bg-gradient-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent">StudyPal</h1>
+                <p className="text-xs text-slate-400 font-semibold">Create your account</p>
               </div>
             </div>
 

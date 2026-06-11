@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date().toISOString(),
       uploadedBy: tokenData.email,
       telegramMessageId: telegramResult.messageId,
+      telegramFileId: telegramResult.fileId,
       totalDownloads: 0,
       description: description || 'No description provided'
     };
