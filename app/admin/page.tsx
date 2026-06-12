@@ -14,19 +14,24 @@ export default function AdminDashboard() {
   const [paperCount, setPaperCount] = useState(0);
   const [revenue, setRevenue] = useState(0);
   const [universityCount, setUniversityCount] = useState(0);
+  const [studentCount, setStudentCount] = useState(0);
 
   const fetchDashboardStats = async () => {
     try {
-      const [papersResponse, universitiesResponse] = await Promise.all([
+      const adminToken = localStorage.getItem('adminToken');
+      const [papersResponse, universitiesResponse, studentsResponse] = await Promise.all([
         fetch('/api/papers'),
         fetch('/api/universities'),
+        fetch('/api/auth/students', { headers: { Authorization: `Bearer ${adminToken}` } }),
       ]);
       const papersData = await papersResponse.json();
       const universitiesData = await universitiesResponse.json();
+      const studentsData = await studentsResponse.json();
       const papers = papersData.papers || [];
       setPaperCount(papers.length);
       setRevenue(papers.reduce((sum: number, paper: any) => sum + (Number(paper.cost) || 0), 0));
       setUniversityCount((universitiesData.universities || []).length);
+      setStudentCount(studentsData.count || 0);
     } catch (error) {
       console.error('Failed to load admin stats:', error);
     }
@@ -170,6 +175,10 @@ export default function AdminDashboard() {
             { key: 'dashboard', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
             { key: 'universities', label: 'Universities', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
             { key: 'upload', label: 'Upload Papers', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
+            { key: 'store', label: 'Manage Store', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
+            { key: 'ads', label: 'Manage Ads', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
+            { key: 'notices', label: 'Manage Notices', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+            { key: 'students', label: 'Students', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
           ].map((item) => (
             <button
               key={item.key}
@@ -217,11 +226,12 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {[
                   { label: 'Total Papers', value: paperCount, icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', color: 'text-indigo-600', bg: 'bg-indigo-50', display: String(paperCount) },
                   { label: 'Universities', value: universityCount, icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', display: String(universityCount) },
                   { label: 'Paper Revenue', value: revenue, icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-emerald-600', bg: 'bg-emerald-50', display: `KES ${revenue.toLocaleString()}` },
+                  { label: 'Registered Students', value: studentCount, icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', color: 'text-sky-600', bg: 'bg-sky-50', display: String(studentCount) },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                     <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center mb-4`}>
@@ -275,6 +285,22 @@ export default function AdminDashboard() {
           {tab === 'upload' && (
             <PaperUploadManager adminToken={localStorage.getItem('adminToken') || ''} onUploadSuccess={fetchDashboardStats} />
           )}
+
+          {tab === 'store' && (
+            <StoreManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
+
+          {tab === 'ads' && (
+            <AdsManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
+
+          {tab === 'notices' && (
+            <NoticesManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
+
+          {tab === 'students' && (
+            <StudentsManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
         </div>
       </div>
     </div>
@@ -292,90 +318,110 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
   const [name, setName] = useState('');
   const [campusName, setCampusName] = useState('');
   const [message, setMessage] = useState({ text: '', isError: false });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCampusName, setEditCampusName] = useState('');
 
   useEffect(() => { fetchUniversities(); }, []);
 
   const fetchUniversities = async () => {
     try {
-      const response = await fetch('/api/universities');
-      const data = await response.json();
+      const res = await fetch('/api/universities');
+      const data = await res.json();
       setUniversities(data.universities || []);
     } catch (error) {
       console.error('Failed to fetch universities:', error);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const handleAddUniversity = async (e: React.FormEvent) => {
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage({ text: '', isError: false });
     try {
-      const response = await fetch('/api/universities', {
+      const res = await fetch('/api/universities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body: JSON.stringify({ name, campuses: campusName ? [{ name: campusName, location: '' }] : [] }),
+        body: JSON.stringify({ name, campuses: campusName ? [{ id: `c_${Date.now()}`, name: campusName, location: '' }] : [] }),
       });
-      const data = await response.json();
-      if (!response.ok) { setMessage({ text: data.error || 'Failed to add university', isError: true }); return; }
-      setMessage({ text: 'University added successfully!', isError: false });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed', true); return; }
+      showMsg('University added!');
       setName(''); setCampusName(''); setShowForm(false);
       fetchUniversities();
-    } catch (error: any) {
-      setMessage({ text: error.message || 'Connection error', isError: true });
-    }
+    } catch (err: any) { showMsg(err.message, true); }
   };
+
+  const handleEdit = async (univ: any) => {
+    if (!editName.trim()) return;
+    const newCampuses = editCampusName.trim()
+      ? [...(univ.campuses || []), { id: `c_${Date.now()}`, name: editCampusName.trim(), location: '' }]
+      : univ.campuses || [];
+    try {
+      const res = await fetch('/api/universities', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ id: univ.id, name: editName, campuses: newCampuses }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed to update', true); return; }
+      showMsg('University updated!');
+      setEditingId(null); setEditName(''); setEditCampusName('');
+      fetchUniversities();
+    } catch (err: any) { showMsg(err.message, true); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this university? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/universities?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed to delete', true); return; }
+      showMsg('University deleted.');
+      fetchUniversities();
+    } catch (err: any) { showMsg(err.message, true); }
+  };
+
+  const btnClass = 'px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg';
 
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900">Manage Universities</h2>
-          <p className="text-slate-500 mt-1">Add and manage university profiles</p>
+          <p className="text-slate-500 mt-1">Add, edit, and remove university profiles</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg ${
-            showForm
-              ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              : 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95'
-          }`}
-        >
+        <button onClick={() => setShowForm(!showForm)}
+          className={`${btnClass} ${showForm ? 'bg-slate-200 text-slate-700' : 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-indigo-500/25 hover:scale-105'}`}>
           {showForm ? 'Cancel' : '+ Add University'}
         </button>
       </div>
 
       {message.text && (
-        <div className={`p-4 rounded-2xl mb-6 border text-sm font-medium flex items-center gap-2 ${
-          message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-        }`}>
+        <div className={`p-4 rounded-2xl mb-6 border text-sm font-medium flex items-center gap-2 ${message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
           {message.text}
         </div>
       )}
 
       {showForm && (
-        <form onSubmit={handleAddUniversity} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
-          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            Add New University
-          </h3>
+        <form onSubmit={handleAdd} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+          <h3 className="text-lg font-bold text-slate-900 mb-6">Add New University</h3>
           <div className="space-y-5">
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">University Name *</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Egerton University" className={INPUT_CLASS} required />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Egerton University" className={INPUT_CLASS} required />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">First Campus Name (optional)</label>
-              <input type="text" value={campusName} onChange={(e) => setCampusName(e.target.value)}
-                placeholder="e.g. Main Campus" className={INPUT_CLASS} />
+              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">First Campus (optional)</label>
+              <input type="text" value={campusName} onChange={(e) => setCampusName(e.target.value)} placeholder="e.g. Main Campus" className={INPUT_CLASS} />
             </div>
-            <button type="submit"
-              className="w-full py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.01] active:scale-[0.99]">
+            <button type="submit" className="w-full py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 shadow-lg transition-all hover:scale-[1.01]">
               Add University
             </button>
           </div>
@@ -384,37 +430,59 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1,2,3,4].map((i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse">
-              <div className="h-5 w-2/3 bg-slate-200 rounded mb-3" />
-              <div className="h-4 w-1/2 bg-slate-100 rounded" />
-            </div>
-          ))}
+          {[1,2,3,4].map(i => <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse h-28" />)}
         </div>
+      ) : universities.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">No universities added yet.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {universities.map((univ) => (
+          {universities.map(univ => (
             <div key={univ.id} className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-indigo-200 hover:shadow-md transition-all">
-              <div className="flex items-start gap-4">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-2">{univ.name}</h3>
-                  <div className="space-y-1">
-                    {univ.campuses?.map((campus: any) => (
-                      <span key={campus.id} className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold mr-1 mb-1">
-                        📍 {campus.name} {campus.location && `(${campus.location})`}
-                      </span>
-                    ))}
-                    {(!univ.campuses || univ.campuses.length === 0) && (
-                      <span className="text-xs text-slate-400">No campuses added</span>
-                    )}
+              {editingId === univ.id ? (
+                <div className="space-y-3">
+                  <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                    placeholder="University name" className={INPUT_CLASS} />
+                  <input type="text" value={editCampusName} onChange={(e) => setEditCampusName(e.target.value)}
+                    placeholder="Add new campus (optional)" className={INPUT_CLASS} />
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => handleEdit(univ)}
+                      className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">
+                      ✓ Save
+                    </button>
+                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCampusName(''); }}
+                      className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-all">
+                      Cancel
+                    </button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-start gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 mb-2">{univ.name}</h3>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {univ.campuses?.map((c: any) => (
+                        <span key={c.id || c.name} className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">📍 {c.name}</span>
+                      ))}
+                      {(!univ.campuses || univ.campuses.length === 0) && <span className="text-xs text-slate-400">No campuses</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditingId(univ.id); setEditName(univ.name); setEditCampusName(''); }}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all">
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => handleDelete(univ.id)}
+                        className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all">
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -613,3 +681,661 @@ function AdminUploadPage({ onUploadSuccess }: { onUploadSuccess: () => void }) {
     </form>
   );
 }
+
+// ── Store Manager Component ──
+function StoreManager({ adminToken }: { adminToken: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState({ text: '', isError: false });
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [condition, setCondition] = useState('Good');
+  const [category, setCategory] = useState('Electronics');
+  const [contactInfo, setContactInfo] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+
+  const fetchItems = async () => {
+    try {
+      const res = await fetch('/api/marketplace/items');
+      const data = await res.json();
+      setItems(data.items || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const handleToggleStatus = async (itemId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'available' ? 'sold' : 'available';
+    try {
+      const res = await fetch('/api/marketplace/items', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ id: itemId, status: nextStatus }),
+      });
+      if (res.ok) {
+        fetchItems();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to update status');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!confirm('Are you sure you want to delete this marketplace item?')) return;
+    try {
+      const res = await fetch(`/api/marketplace/items?id=${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      if (res.ok) {
+        fetchItems();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to delete item');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage({ text: '', isError: false });
+
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('price', price);
+      formData.append('condition', condition);
+      formData.append('category', category);
+      formData.append('contactInfo', contactInfo);
+      if (file) {
+        formData.append('file', file);
+      }
+
+      const res = await fetch('/api/marketplace/items', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload item');
+
+      setMessage({ text: '✅ Marketplace item added successfully!', isError: false });
+      setTitle('');
+      setDescription('');
+      setPrice('');
+      setContactInfo('');
+      setFile(null);
+      
+      const fileInput = document.getElementById('item-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      fetchItems();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Upload failed', isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Add Marketplace Item (New/Second Hand)</h2>
+        
+        {message.text && (
+          <div className={`mb-6 rounded-2xl p-4 text-sm font-medium border flex items-center gap-2 ${
+            message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Item Name *</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Scientific Calculator FX-991" className={INPUT_CLASS} required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Price (KES) *</label>
+              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)}
+                placeholder="e.g. 1500" className={INPUT_CLASS} required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Category *</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={SELECT_CLASS}>
+                {['Calculators', 'Furniture', 'Electronics', 'Textbooks', 'Others'].map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Condition *</label>
+              <select value={condition} onChange={(e) => setCondition(e.target.value)} className={SELECT_CLASS}>
+                {['New', 'Like New', 'Good', 'Fair', 'Poor'].map((cond) => (
+                  <option key={cond} value={cond}>{cond}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Seller Contact Details *</label>
+              <input type="text" value={contactInfo} onChange={(e) => setContactInfo(e.target.value)}
+                placeholder="e.g. Phone 0712345678" className={INPUT_CLASS} required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Product Image *</label>
+              <input id="item-file-input" type="file" accept="image/*"
+                onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])}
+                className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-gradient-to-r file:from-indigo-600 file:to-fuchsia-600 file:text-white file:cursor-pointer file:transition-all cursor-pointer bg-white rounded-xl border-2 border-indigo-200 hover:border-indigo-300 p-2.5 transition-all"
+                required />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Description *</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe the item (condition, features, pickup location...)"
+              className="w-full bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-indigo-300 transition-all text-sm font-medium"
+              rows={3} required />
+          </div>
+
+          <button type="submit" disabled={submitting}
+            className={`w-full py-4 rounded-xl font-bold text-sm text-white transition-all ${
+              submitting ? 'bg-indigo-300 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 shadow-lg shadow-indigo-500/25 hover:scale-[1.01] active:scale-[0.99]'
+            }`}>
+            {submitting ? 'Adding Item…' : 'Add Item to Marketplace'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h3 className="text-xl font-black text-slate-900 mb-6">Current Items for Sale</h3>
+        {loading ? (
+          <p className="text-sm text-slate-500 animate-pulse">Loading items...</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-slate-500">No items uploaded yet.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {items.map((i) => (
+              <div key={i.id} className="border border-slate-200 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <div className="h-32 bg-slate-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden relative">
+                    {i.telegramFileId ? (
+                      <img src={`/api/media/telegram/${i.telegramFileId}`} alt={i.title} className="object-cover w-full h-full" />
+                    ) : (
+                      <span className="text-slate-400 text-xs">No Image Preview</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="inline-block px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-bold">{i.category}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{i.condition}</span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 text-sm mb-1">{i.title}</h4>
+                  <p className="text-xs text-slate-500 line-clamp-2 mb-3">{i.description}</p>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center border-t border-slate-100 pt-3">
+                    <span className="font-black text-slate-900 text-sm">KES {i.price}</span>
+                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg uppercase ${i.status === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{i.status}</span>
+                  </div>
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleToggleStatus(i.id, i.status)}
+                      className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
+                    >
+                      🔄 Mark {i.status === 'available' ? 'Sold' : 'Available'}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteItem(i.id)}
+                      className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
+                      title="Delete Item"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Ads Manager Component ──
+function AdsManager({ adminToken }: { adminToken: string }) {
+  const [ads, setAds] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState({ text: '', isError: false });
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+
+  const fetchAds = async () => {
+    try {
+      const res = await fetch('/api/marketplace/advertisements?all=true');
+      const data = await res.json();
+      setAds(data.advertisements || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAds();
+  }, []);
+
+  const handleToggleAdStatus = async (adId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    try {
+      const res = await fetch('/api/marketplace/advertisements', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ id: adId, status: nextStatus }),
+      });
+      if (res.ok) {
+        fetchAds();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to update status');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteAd = async (adId: string) => {
+    if (!confirm('Are you sure you want to delete this advertisement?')) return;
+    try {
+      const res = await fetch(`/api/marketplace/advertisements?id=${adId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      if (res.ok) {
+        fetchAds();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to delete advertisement');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage({ text: '', isError: false });
+
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('linkUrl', linkUrl);
+      if (file) {
+        formData.append('file', file);
+      }
+
+      const res = await fetch('/api/marketplace/advertisements', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload ad');
+
+      setMessage({ text: '✅ Advertisement banner successfully added!', isError: false });
+      setTitle('');
+      setDescription('');
+      setLinkUrl('');
+      setFile(null);
+      
+      const fileInput = document.getElementById('ad-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      fetchAds();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Upload failed', isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Upload Banner Advertisement</h2>
+        
+        {message.text && (
+          <div className={`mb-6 rounded-2xl p-4 text-sm font-medium border flex items-center gap-2 ${
+            message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Ad Title *</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Tech Internships 2026" className={INPUT_CLASS} required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Action Link URL</label>
+              <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="e.g. https://company.com/apply" className={INPUT_CLASS} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Banner Image *</label>
+            <input id="ad-file-input" type="file" accept="image/*"
+              onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])}
+              className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-gradient-to-r file:from-indigo-600 file:to-fuchsia-600 file:text-white file:cursor-pointer file:transition-all cursor-pointer bg-white rounded-xl border-2 border-indigo-200 hover:border-indigo-300 p-2.5 transition-all"
+              required />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Short Tagline/Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Apply before August 1st for the executive cohort program"
+              className="w-full bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-indigo-300 transition-all text-sm font-medium"
+              rows={2} />
+          </div>
+
+          <button type="submit" disabled={submitting}
+            className={`w-full py-4 rounded-xl font-bold text-sm text-white transition-all ${
+              submitting ? 'bg-indigo-300 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 shadow-lg shadow-indigo-500/25 hover:scale-[1.01] active:scale-[0.99]'
+            }`}>
+            {submitting ? 'Uploading Ad…' : 'Publish Banner Ad'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h3 className="text-xl font-black text-slate-900 mb-6">Published Banner Advertisements</h3>
+        {loading ? (
+          <p className="text-sm text-slate-500 animate-pulse">Loading ads...</p>
+        ) : ads.length === 0 ? (
+          <p className="text-sm text-slate-500">No active ads published yet.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {ads.map((ad) => (
+              <div key={ad.id} className="border border-slate-200 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <div className="h-32 bg-slate-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden relative">
+                    {ad.telegramFileId ? (
+                      <img src={`/api/media/telegram/${ad.telegramFileId}`} alt={ad.title} className="object-cover w-full h-full" />
+                    ) : (
+                      <span className="text-slate-400 text-xs">No Image Preview</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-slate-900 text-sm mb-1">{ad.title}</h4>
+                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{ad.status}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">{ad.description}</p>
+                </div>
+                <div>
+                  {ad.linkUrl && (
+                    <a href={ad.linkUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline block mb-3">
+                      Action Link →
+                    </a>
+                  )}
+                  <div className="flex gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleToggleAdStatus(ad.id, ad.status)}
+                      className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
+                    >
+                      🔄 Toggle State
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAd(ad.id)}
+                      className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
+                      title="Delete Ad"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Notices Manager Component ──
+function NoticesManager({ adminToken }: { adminToken: string }) {
+  const [notices, setNotices] = useState<any[]>([]);
+  const [universities, setUniversities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState({ text: '', isError: false });
+
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [category, setCategory] = useState('Academic');
+  const [university, setUniversity] = useState('all');
+
+  const fetchNoticesAndUnivs = async () => {
+    try {
+      const [noticesRes, univsRes] = await Promise.all([
+        fetch('/api/marketplace/notices'),
+        fetch('/api/universities'),
+      ]);
+      const noticesData = await noticesRes.json();
+      const univsData = await univsRes.json();
+      setNotices(noticesData.notices || []);
+      setUniversities(univsData.universities || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNoticesAndUnivs();
+  }, []);
+
+  const handleDeleteNotice = async (noticeId: string) => {
+    if (!confirm('Are you sure you want to delete this announcement/notice?')) return;
+    try {
+      const res = await fetch(`/api/marketplace/notices?id=${noticeId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      if (res.ok) {
+        fetchNoticesAndUnivs();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to delete notice');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage({ text: '', isError: false });
+
+    try {
+      const res = await fetch('/api/marketplace/notices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          title,
+          content,
+          category,
+          university,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to post notice');
+
+      setMessage({ text: '✅ Notice posted to announcement board!', isError: false });
+      setTitle('');
+      setContent('');
+      setCategory('Academic');
+      setUniversity('all');
+
+      fetchNoticesAndUnivs();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Posting failed', isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Create Announcement / Notice</h2>
+        
+        {message.text && (
+          <div className={`mb-6 rounded-2xl p-4 text-sm font-medium border flex items-center gap-2 ${
+            message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Notice Title *</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Graduation List Approval Schedule" className={INPUT_CLASS} required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Category *</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={SELECT_CLASS}>
+                {['Academic', 'Events', 'General', 'Jobs'].map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Target University *</label>
+            <select value={university} onChange={(e) => setUniversity(e.target.value)} className={SELECT_CLASS}>
+              <option value="all">All Universities (Global Notice)</option>
+              {universities.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Announcement Content *</label>
+            <textarea value={content} onChange={(e) => setContent(e.target.value)}
+              placeholder="Write the details of the notice..."
+              className="w-full bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-indigo-300 transition-all text-sm font-medium"
+              rows={4} required />
+          </div>
+
+          <button type="submit" disabled={submitting}
+            className={`w-full py-4 rounded-xl font-bold text-sm text-white transition-all ${
+              submitting ? 'bg-indigo-300 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 shadow-lg shadow-indigo-500/25 hover:scale-[1.01] active:scale-[0.99]'
+            }`}>
+            {submitting ? 'Posting notice…' : 'Publish Notice Announcement'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h3 className="text-xl font-black text-slate-900 mb-6">Recent Notices Posted</h3>
+        {loading ? (
+          <p className="text-sm text-slate-500 animate-pulse">Loading notices...</p>
+        ) : notices.length === 0 ? (
+          <p className="text-sm text-slate-500">No announcements published yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {notices.map((n) => {
+              const uName = n.university === 'all' ? 'All Universities' : (universities.find((u) => u.id === n.university)?.name || n.university);
+              return (
+                <div key={n.id} className="border border-slate-100 rounded-2xl p-5 bg-slate-50/50 hover:bg-slate-50 transition-colors flex justify-between items-start">
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700 text-[10px] font-bold uppercase">{n.category}</span>
+                      <span className="text-[10px] font-semibold text-slate-500">{uName}</span>
+                      <span className="text-[10px] text-slate-400">{new Date(n.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-sm mb-1">{n.title}</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{n.content}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteNotice(n.id)}
+                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-xs flex-shrink-0"
+                    title="Delete Notice"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

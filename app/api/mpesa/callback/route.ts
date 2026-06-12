@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { addSubscription, getUsers, writeJsonFile, readJsonFile } from '@/lib/dataStore';
+import { addSubscription, getUsers, writeJsonFile, readJsonFile, updateMarketplaceItem } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -60,27 +60,34 @@ export async function POST(req: Request) {
       expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year access
 
       if (matchedUserIdFinal && paperId) {
-        // Resolve full paperId if it was a partial substring
-        const papers = readJsonFile('papers.json') || [];
-        const matchedPaper = papers.find((p: any) => p.id === paperId || p.id.startsWith(paperId));
-        const finalPaperId = matchedPaper ? matchedPaper.id : paperId;
+        const isItem = String(paperId).startsWith('item_');
 
-        addSubscription({
-          id: `sub_${Date.now()}`,
-          userId: matchedUserIdFinal,
-          paperId: finalPaperId,
-          status: 'active',
-          expiryDate: expiryDate.toISOString(),
-          receiptNumber,
-          amount,
-          createdAt: new Date().toISOString(),
-        });
-        
-        // Find user email for logging if possible
-        const fullUser = getUsers().find((u: any) => u.id === matchedUserIdFinal);
-        console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${finalPaperId}`);
+        if (isItem) {
+          updateMarketplaceItem(paperId, { status: 'sold' });
+          console.log(`[M-Pesa] ✅ Marketplace item ${paperId} marked as sold. Buyer: ${matchedUserIdFinal}, Receipt: ${receiptNumber}`);
+        } else {
+          // Resolve full paperId if it was a partial substring
+          const papers = readJsonFile('papers.json') || [];
+          const matchedPaper = papers.find((p: any) => p.id === paperId || p.id.startsWith(paperId));
+          const finalPaperId = matchedPaper ? matchedPaper.id : paperId;
+
+          addSubscription({
+            id: `sub_${Date.now()}`,
+            userId: matchedUserIdFinal,
+            paperId: finalPaperId,
+            status: 'active',
+            expiryDate: expiryDate.toISOString(),
+            receiptNumber,
+            amount,
+            createdAt: new Date().toISOString(),
+          });
+          
+          // Find user email for logging if possible
+          const fullUser = getUsers().find((u: any) => u.id === matchedUserIdFinal);
+          console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${finalPaperId}`);
+        }
       } else {
-        console.warn(`[M-Pesa] ⚠️ Could not match transaction ${checkoutRequestID} to a user or paper. User: ${matchedUserIdFinal}, Paper: ${paperId}`);
+        console.warn(`[M-Pesa] ⚠️ Could not match transaction ${checkoutRequestID} to a user or paper/item. User: ${matchedUserIdFinal}, ID: ${paperId}`);
       }
 
     } else {

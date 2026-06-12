@@ -224,3 +224,92 @@ export const addSubscription = (subscription: any) => {
   writeJsonFile('subscriptions.json', subs);
   return subscription;
 };
+
+// Marketplace Items operations
+export const getMarketplaceItems = () => readJsonFile('marketplace_items.json');
+
+export const getMarketplaceItemById = (id: string) => {
+  const items = getMarketplaceItems();
+  return items.find((i: any) => i.id === id);
+};
+
+export const addMarketplaceItem = (item: any) => {
+  const items = getMarketplaceItems() || [];
+  items.push(item);
+  writeJsonFile('marketplace_items.json', items);
+  return item;
+};
+
+export const updateMarketplaceItem = (id: string, updates: any) => {
+  const items = getMarketplaceItems();
+  const index = items.findIndex((i: any) => i.id === id);
+  if (index !== -1) {
+    items[index] = { ...items[index], ...updates };
+    writeJsonFile('marketplace_items.json', items);
+    return items[index];
+  }
+  return null;
+};
+
+export const deleteMarketplaceItem = (id: string) => {
+  const items = getMarketplaceItems();
+  const filtered = items.filter((i: any) => i.id !== id);
+  writeJsonFile('marketplace_items.json', filtered);
+  return true;
+};
+
+// Advertisements operations
+export const getAdvertisements = () => readJsonFile('advertisements.json');
+
+export const addAdvertisement = (ad: any) => {
+  const ads = getAdvertisements() || [];
+  ads.push(ad);
+  writeJsonFile('advertisements.json', ads);
+  return ad;
+};
+
+export const updateAdvertisement = (id: string, updates: any) => {
+  const ads = getAdvertisements();
+  const index = ads.findIndex((a: any) => a.id === id);
+  if (index !== -1) {
+    ads[index] = { ...ads[index], ...updates };
+    writeJsonFile('advertisements.json', ads);
+    return ads[index];
+  }
+  return null;
+};
+
+export const deleteAdvertisement = (id: string) => {
+  const ads = getAdvertisements();
+  const filtered = ads.filter((a: any) => a.id !== id);
+  writeJsonFile('advertisements.json', filtered);
+  return true;
+};
+
+// Notices operations
+export const getNotices = () => readJsonFile('notices.json');
+
+export const addNotice = (notice: any) => {
+  const notices = getNotices() || [];
+  notices.push(notice);
+  writeJsonFile('notices.json', notices);
+  return notice;
+};
+
+export const updateNotice = (id: string, updates: any) => {
+  const notices = getNotices();
+  const index = notices.findIndex((n: any) => n.id === id);
+  if (index !== -1) {
+    notices[index] = { ...notices[index], ...updates };
+    writeJsonFile('notices.json', notices);
+    return notices[index];
+  }
+  return null;
+};
+
+export const deleteNotice = (id: string) => {
+  const notices = getNotices();
+  const filtered = notices.filter((n: any) => n.id !== id);
+  writeJsonFile('notices.json', filtered);
+  return true;
+};

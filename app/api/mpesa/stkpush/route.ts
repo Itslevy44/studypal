@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getMpesaToken, generatePassword, generateTimestamp } from '@/lib/mpesa';
 import { verifyRequestToken } from '@/lib/auth';
-import { getUsers, getUserById, writeJsonFile, readJsonFile, getPapers } from '@/lib/dataStore';
+import { getUsers, getUserById, writeJsonFile, readJsonFile, getPapers, getMarketplaceItems } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -80,20 +80,29 @@ export async function POST(req: Request) {
     // Record the pending transaction mapping CheckoutRequestID -> { userId, paperId }
     if (data.CheckoutRequestID) {
       try {
-        const papers = getPapers() || [];
-        const matchedPaper = papers.find((p: any) => p.id === accountReference || p.id.startsWith(accountReference));
-        const paperId = matchedPaper ? matchedPaper.id : (accountReference || 'unknown');
+        const isItem = String(accountReference).startsWith('item_');
+        let resolvedId = accountReference || 'unknown';
+
+        if (isItem) {
+          const items = getMarketplaceItems() || [];
+          const matchedItem = items.find((i: any) => i.id === accountReference || i.id.startsWith(accountReference));
+          if (matchedItem) resolvedId = matchedItem.id;
+        } else {
+          const papers = getPapers() || [];
+          const matchedPaper = papers.find((p: any) => p.id === accountReference || p.id.startsWith(accountReference));
+          if (matchedPaper) resolvedId = matchedPaper.id;
+        }
 
         const pendingPayments = readJsonFile('pending_payments.json') || [];
         pendingPayments.push({
           checkoutRequestId: data.CheckoutRequestID,
           userId: decoded?.userId || null,
-          paperId: paperId,
+          paperId: resolvedId,
           amount: amount,
           createdAt: new Date().toISOString(),
         });
         writeJsonFile('pending_payments.json', pendingPayments);
-        console.log(`[M-Pesa] Pending payment stored: RequestID: ${data.CheckoutRequestID} | User: ${decoded?.userId} | Paper: ${paperId}`);
+        console.log(`[M-Pesa] Pending payment stored: RequestID: ${data.CheckoutRequestID} | User: ${decoded?.userId} | ID: ${resolvedId}`);
       } catch (err) {
         console.error('[M-Pesa] Failed to record pending payment:', err);
       }

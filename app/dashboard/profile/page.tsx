@@ -47,17 +47,37 @@ export default function ProfilePage() {
       router.push('/auth/login');
       return;
     }
-    const parsedUser: User = JSON.parse(userData);
-    setUser(parsedUser);
-    setFullName(parsedUser.fullName);
-    setCampus(parsedUser.campus);
-    setYearOfStudy(parsedUser.yearOfStudy);
-    setUniversity(parsedUser.university);
 
-    fetch('/api/universities')
-      .then((r) => r.json())
-      .then((d) => setUniversities(d.universities || []))
-      .catch(console.error)
+    // Fetch fresh user data from server + universities in parallel
+    Promise.all([
+      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      fetch('/api/universities').then((r) => r.json()),
+    ])
+      .then(([meData, univsData]) => {
+        const freshUser: User = meData.user || JSON.parse(userData);
+        // Persist fresh data to localStorage
+        localStorage.setItem('user', JSON.stringify(freshUser));
+        setUser(freshUser);
+        setFullName(freshUser.fullName || '');
+        setCampus(freshUser.campus || '');
+        // Normalise yearOfStudy to "Year X" format
+        const yr = freshUser.yearOfStudy || '1';
+        const normYear = yr.startsWith('Year ') ? yr : `Year ${yr}`;
+        setYearOfStudy(normYear);
+        setUniversity(freshUser.university || '');
+        setUniversities(univsData.universities || []);
+      })
+      .catch((err) => {
+        console.error(err);
+        // Fallback to localStorage on network error
+        const parsedUser: User = JSON.parse(userData);
+        setUser(parsedUser);
+        setFullName(parsedUser.fullName);
+        setCampus(parsedUser.campus);
+        const yr = parsedUser.yearOfStudy || '1';
+        setYearOfStudy(yr.startsWith('Year ') ? yr : `Year ${yr}`);
+        setUniversity(parsedUser.university);
+      })
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -229,8 +249,8 @@ export default function ProfilePage() {
                 onChange={(e) => setYearOfStudy(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
               >
-                {['1', '2', '3', '4', '5', '6'].map((y) => (
-                  <option key={y} value={y}>Year {y}</option>
+                {['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'].map((y) => (
+                  <option key={y} value={y}>{y}</option>
                 ))}
               </select>
             </div>
