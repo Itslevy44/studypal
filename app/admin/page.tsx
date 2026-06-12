@@ -946,6 +946,11 @@ function AdsManager({ adminToken }: { adminToken: string }) {
   const [linkUrl, setLinkUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLinkUrl, setEditLinkUrl] = useState('');
+
   const fetchAds = async () => {
     try {
       const res = await fetch('/api/marketplace/advertisements?all=true');
@@ -998,6 +1003,34 @@ function AdsManager({ adminToken }: { adminToken: string }) {
       } else {
         const errData = await res.json();
         alert(errData.error || 'Failed to delete advertisement');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditAd = async (ad: any) => {
+    if (!editTitle.trim()) return;
+    try {
+      const res = await fetch('/api/marketplace/advertisements', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          id: ad.id,
+          title: editTitle,
+          description: editDescription,
+          linkUrl: editLinkUrl,
+        }),
+      });
+      if (res.ok) {
+        setEditingId(null);
+        fetchAds();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to update advertisement');
       }
     } catch (err) {
       console.error(err);
@@ -1111,38 +1144,92 @@ function AdsManager({ adminToken }: { adminToken: string }) {
                 <div>
                   <div className="h-32 bg-slate-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden relative">
                     {ad.telegramFileId ? (
-                      <img src={`/api/media/telegram/${ad.telegramFileId}`} alt={ad.title} className="object-cover w-full h-full" />
+                      <img 
+                        src={`/api/media/telegram/${ad.telegramFileId}`} 
+                        alt={ad.title} 
+                        className="object-cover w-full h-full"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const span = parent.querySelector('.img-error');
+                            if (span) (span as HTMLSpanElement).style.display = 'block';
+                          }
+                        }}
+                      />
                     ) : (
                       <span className="text-slate-400 text-xs">No Image Preview</span>
                     )}
+                    <span className="img-error text-slate-400 text-xs hidden">Image unavailable</span>
                   </div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-bold text-slate-900 text-sm mb-1">{ad.title}</h4>
-                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{ad.status}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 mb-2">{ad.description}</p>
+                </div>
+                <div className="mt-2">
+                  {editingId === ad.id ? (
+                    <div className="space-y-2">
+                      <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Ad title" className={INPUT_CLASS} />
+                      <input type="text" value={editDescription} onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="Description" className={INPUT_CLASS} />
+                      <input type="url" value={editLinkUrl} onChange={(e) => setEditLinkUrl(e.target.value)}
+                        placeholder="Link URL" className={INPUT_CLASS} />
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-bold text-slate-900 text-sm mb-1">{ad.title}</h4>
+                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{ad.status}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mb-2">{ad.description}</p>
+                    </div>
+                  )}
                 </div>
                 <div>
-                  {ad.linkUrl && (
-                    <a href={ad.linkUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline block mb-3">
-                      Action Link →
-                    </a>
+                  {editingId === ad.id ? (
+                    <div className="flex gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => handleEditAd(ad)}
+                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all"
+                      >
+                        ✓ Save
+                      </button>
+                      <button
+                        onClick={() => { setEditingId(null); setEditTitle(''); setEditDescription(''); setEditLinkUrl(''); }}
+                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {ad.linkUrl && (
+                        <a href={ad.linkUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline block mb-3">
+                          Action Link →
+                        </a>
+                      )}
+                      <div className="flex gap-2 pt-3 border-t border-slate-100">
+                        <button
+                          onClick={() => { setEditingId(ad.id); setEditTitle(ad.title); setEditDescription(ad.description || ''); setEditLinkUrl(ad.linkUrl || ''); }}
+                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-all flex items-center justify-center gap-1"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleToggleAdStatus(ad.id, ad.status)}
+                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
+                        >
+                          🔄 Toggle State
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAd(ad.id)}
+                          className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
+                          title="Delete Ad"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
                   )}
-                  <div className="flex gap-2 pt-3 border-t border-slate-100">
-                    <button
-                      onClick={() => handleToggleAdStatus(ad.id, ad.status)}
-                      className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
-                    >
-                      🔄 Toggle State
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAd(ad.id)}
-                      className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
-                      title="Delete Ad"
-                    >
-                      🗑️
-                    </button>
-                  </div>
                 </div>
               </div>
             ))}
