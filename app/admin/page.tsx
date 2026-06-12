@@ -1153,6 +1153,70 @@ function AdsManager({ adminToken }: { adminToken: string }) {
   );
 }
 
+// ── Students Manager Component ──
+function StudentsManager({ adminToken }: { adminToken: string }) {
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStudents = async () => {
+    try {
+      const res = await fetch('/api/auth/students', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json();
+      setStudents(data.students || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Registered Students</h2>
+        {loading ? (
+          <p className="text-sm text-slate-500 animate-pulse">Loading students...</p>
+        ) : students.length === 0 ? (
+          <p className="text-sm text-slate-500">No students registered yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="text-left py-3 font-bold text-slate-600">Name</th>
+                  <th className="text-left py-3 font-bold text-slate-600">Email</th>
+                  <th className="text-left py-3 font-bold text-slate-600">University</th>
+                  <th className="text-left py-3 font-bold text-slate-600">Campus</th>
+                  <th className="text-left py-3 font-bold text-slate-600">Year</th>
+                  <th className="text-left py-3 font-bold text-slate-600">Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="py-3 font-medium text-slate-900">{s.fullName}</td>
+                    <td className="py-3 text-slate-600">{s.email}</td>
+                    <td className="py-3 text-slate-600">{s.university || '-'}</td>
+                    <td className="py-3 text-slate-600">{s.campus || '-'}</td>
+                    <td className="py-3 text-slate-600">{s.yearOfStudy || '-'}</td>
+                    <td className="py-3 text-slate-500">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Notices Manager Component ──
 function NoticesManager({ adminToken }: { adminToken: string }) {
   const [notices, setNotices] = useState<any[]>([]);

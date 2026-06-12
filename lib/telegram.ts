@@ -21,12 +21,25 @@ export const uploadToTelegram = async (
   metadata: Record<string, any>
 ): Promise<TelegramUploadResult> => {
   try {
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID!);
-    formData.append('caption', JSON.stringify(metadata));
-    formData.append('document', file);
+    const isImage = file.type.startsWith('image/');
+    const caption = JSON.stringify(metadata);
 
-    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
+    let telegramUrl: string;
+    let formData: FormData;
+
+    if (isImage) {
+      telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+      formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID!);
+      formData.append('caption', caption);
+      formData.append('photo', file);
+    } else {
+      telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
+      formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID!);
+      formData.append('caption', caption);
+      formData.append('document', file);
+    }
     
     console.log('[Telegram Upload] Sending request:', {
       url: telegramUrl,
@@ -65,7 +78,8 @@ export const uploadToTelegram = async (
     }
 
     const doc = result.result?.document;
-    const fileId = doc?.file_id;
+    const photo = result.result?.photo;
+    const fileId = doc?.file_id || (photo ? photo[photo.length - 1]?.file_id : undefined);
     console.log('[Telegram Upload] Success! Message ID:', result.result.message_id, 'File ID:', fileId);
     
     return {
@@ -109,15 +123,16 @@ export const getFileFromTelegram = async (
 
     const result = await response.json();
 
-    if (!result.ok || !result.result?.document) {
+    if (!result.ok || (!result.result?.document && !result.result?.photo)) {
       console.warn('[Telegram GetFile] Failed to forward/fetch message info:', result);
       return null;
     }
 
     const doc = result.result.document;
+    const photo = result.result.photo;
+    const fileId = doc?.file_id || (photo ? photo[photo.length - 1]?.file_id : undefined);
     const forwardMessageId = result.result.message_id;
 
-    // Asynchronously delete the forwarded message to keep the chat clean
     fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -128,9 +143,9 @@ export const getFileFromTelegram = async (
     }).catch((err) => console.error('[Telegram GetFile] Failed to delete forwarded message:', err));
 
     return {
-      fileId: doc.file_id,
-      fileSize: doc.file_size,
-      mimeType: doc.mime_type || 'application/octet-stream',
+      fileId: fileId,
+      fileSize: doc?.file_size || (photo ? photo[photo.length - 1]?.file_size : undefined) || 0,
+      mimeType: doc?.mime_type || 'image/jpeg',
     };
   } catch (error) {
     console.error('Error fetching file from Telegram:', error);
