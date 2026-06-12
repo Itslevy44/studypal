@@ -41,5 +41,27 @@
         "location": "Nairobi"
       }
     ]
+  },
+  {
+    "id": "univ_865fbcb9",
+    "name": "Meru University",
+    "campuses": [
+      {
+        "id": "c_1781250823525",
+        "name": "Main Campus",
+        "location": ""
+      }
+    ]
+  },
+  {
+    "id": "univ_ef357846",
+    "name": "Kisii University",
+    "campuses": [
+      {
+        "id": "c_1781250847852",
+        "name": "Main Campus",
+        "location": ""
+      }
+    ]
   }
 ]
