@@ -2,6 +2,28 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
+type TelegramMessage = {
+  message_id: number;
+  chat?: {
+    id?: number | string;
+  };
+  caption?: string;
+  document?: {
+    file_id: string;
+  };
+  photo?: Array<{
+    file_id: string;
+  }>;
+};
+
+type TelegramUpdate = {
+  update_id: number;
+  message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
+};
+
 export interface TelegramUploadResult {
   success: boolean;
   messageId?: string;
@@ -15,10 +37,41 @@ export interface TelegramFileInfo {
   mimeType: string;
 }
 
+export interface TelegramJsonDocument<T = unknown> {
+  data: T;
+  metadata: Record<string, unknown>;
+  messageId: string;
+  fileId: string;
+  uploadedAt?: string;
+}
+
+const getTelegramApiUrl = (method: string) => {
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error('Telegram bot token is not configured.');
+  }
+
+  return `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`;
+};
+
+const getStringMetadata = (metadata: Record<string, unknown>, key: string): string | undefined => {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+const parseTelegramMetadata = (caption?: string): Record<string, unknown> => {
+  if (!caption) return {};
+
+  try {
+    return JSON.parse(caption);
+  } catch {
+    return {};
+  }
+};
+
 // Upload file to Telegram
 export const uploadToTelegram = async (
   file: File,
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
 ): Promise<TelegramUploadResult> => {
   try {
     const isImage = file.type.startsWith('image/');
@@ -87,17 +140,118 @@ export const uploadToTelegram = async (
       messageId: result.result.message_id.toString(),
       fileId: fileId,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Telegram upload failed';
+    const stack = error instanceof Error ? error.stack : undefined;
+
     console.error('[Telegram Upload] Exception:', {
-      message: error.message,
-      stack: error.stack
+      message,
+      stack,
     });
     
     return {
       success: false,
-      error: error.message || 'Telegram upload failed',
+      error: message,
     };
   }
+};
+
+export const sendJsonDocumentToTelegram = async (
+  filename: string,
+  data: unknown,
+  metadata: Record<string, unknown> = {}
+): Promise<TelegramUploadResult> => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const file = new File([blob], filename, { type: 'application/json' });
+
+  return uploadToTelegram(file, {
+    app: 'studypal_archive',
+    ...metadata,
+    uploadedAt: new Date().toISOString(),
+  });
+};
+
+export const downloadJsonDocumentFromTelegram = async <T = unknown>(
+  fileId: string
+): Promise<T | null> => {
+  const buffer = await downloadFromTelegram(fileId);
+  if (!buffer) return null;
+
+  return JSON.parse(buffer.toString('utf8')) as T;
+};
+
+export const getTelegramUpdates = async (): Promise<TelegramUpdate[]> => {
+  if (!TELEGRAM_BOT_TOKEN) return [];
+
+  const updates: TelegramUpdate[] = [];
+  let offset = 0;
+  let attempts = 0;
+
+  while (attempts < 10) {
+    const params = new URLSearchParams({ limit: '100', timeout: '0' });
+    if (offset) params.set('offset', String(offset));
+
+    const response = await fetch(`${getTelegramApiUrl('getUpdates')}?${params}`);
+    const result = await response.json();
+
+    if (!result.ok || !Array.isArray(result.result)) return updates;
+
+    const page = result.result;
+    updates.push(...page);
+
+    if (page.length < 100) break;
+
+    offset = page[page.length - 1].update_id + 1;
+    attempts += 1;
+  }
+
+  return updates;
+};
+
+export const getLatestJsonDocumentFromTelegram = async <T = unknown>(
+  kind: string
+): Promise<TelegramJsonDocument<T> | null> => {
+  if (!TELEGRAM_CHAT_ID) return null;
+
+  const updates = await getTelegramUpdates();
+  const chatId = TELEGRAM_CHAT_ID.toString();
+  const candidates: TelegramJsonDocument<T>[] = [];
+
+  for (const update of updates) {
+    const message = update.message || update.channel_post || update.edited_message || update.edited_channel_post;
+    if (!message || message.chat?.id?.toString() !== chatId) continue;
+
+    const photo = message.photo?.length ? message.photo[message.photo.length - 1] : undefined;
+    const file = message.document || photo;
+    if (!file?.file_id) continue;
+
+    const metadata = parseTelegramMetadata(message.caption);
+    if (getStringMetadata(metadata, 'app') !== 'studypal_archive' || getStringMetadata(metadata, 'kind') !== kind) continue;
+
+    candidates.push({
+      data: undefined as unknown as T,
+      metadata,
+      messageId: message.message_id.toString(),
+      fileId: file.file_id,
+      uploadedAt: getStringMetadata(metadata, 'uploadedAt'),
+    });
+  }
+
+  if (!candidates.length) return null;
+
+  const latest = candidates.sort((a, b) => {
+    const aTime = Date.parse(a.uploadedAt || '') || Number(a.messageId) || 0;
+    const bTime = Date.parse(b.uploadedAt || '') || Number(b.messageId) || 0;
+    return bTime - aTime;
+  })[0];
+
+  const data = await downloadJsonDocumentFromTelegram<T>(latest.fileId);
+  if (!data) return null;
+
+  return {
+    ...latest,
+    data,
+  };
 };
 
 // Get file info from Telegram message

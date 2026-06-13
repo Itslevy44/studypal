@@ -1,23 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUniversities, updateUniversity, addUniversity, writeJsonFile, readJsonFile } from '@/lib/dataStore';
 import { verifyRequestToken } from '@/lib/auth';
+import {
+  addUniversityToTelegramStore,
+  deleteUniversityFromTelegramStore,
+  getUniversitiesFromTelegramStore,
+  updateUniversityInTelegramStore,
+} from '@/lib/universitiesTelegram';
 import crypto from 'crypto';
 
-// Helper: delete a university by id
-const deleteUniversity = (id: string) => {
-  const univs = getUniversities();
-  const filtered = univs.filter((u: any) => u.id !== id);
-  writeJsonFile('universities.json', filtered);
-  return true;
+type CampusInput = {
+  id?: unknown;
+  name?: unknown;
+  location?: unknown;
 };
 
-export async function GET(request: NextRequest) {
+type NormalizedCampus = {
+  id: string;
+  name: string;
+  location: string;
+};
+
+type UniversityUpdate = {
+  name?: string;
+  campuses?: NormalizedCampus[];
+};
+
+// Helper: normalize campus input
+const normalizeCampuses = (campuses: unknown): NormalizedCampus[] => {
+  if (!Array.isArray(campuses)) return [];
+
+  return campuses.map((campus: CampusInput, index: number) => ({
+    id: typeof campus.id === 'string' ? campus.id : `campus_${Date.now()}_${index}`,
+    name: typeof campus.name === 'string' ? campus.name : '',
+    location: typeof campus.location === 'string' ? campus.location : '',
+  }));
+};
+
+export async function GET() {
   try {
-    const universities = getUniversities();
+    const universities = await getUniversitiesFromTelegramStore();
     return NextResponse.json({ universities });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch universities';
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch universities' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -38,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const { name, campuses } = await request.json();
 
-    if (!name) {
+    if (!name || !String(name).trim()) {
       return NextResponse.json(
         { error: 'University name is required' },
         { status: 400 }
@@ -47,19 +73,20 @@ export async function POST(request: NextRequest) {
 
     const newUniversity = {
       id: `univ_${crypto.randomBytes(4).toString('hex')}`,
-      name,
-      campuses: campuses || [],
+      name: String(name).trim(),
+      campuses: normalizeCampuses(campuses),
     };
 
-    addUniversity(newUniversity);
+    await addUniversityToTelegramStore(newUniversity);
 
     return NextResponse.json({
       success: true,
       university: newUniversity,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to add university';
     return NextResponse.json(
-      { error: error.message || 'Failed to add university' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -87,7 +114,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const updated = updateUniversity(id, { name, campuses });
+    const updated = await updateUniversityInTelegramStore(id, { name, campuses: normalizeCampuses(campuses) });
 
     if (!updated) {
       return NextResponse.json(
@@ -100,9 +127,10 @@ export async function PUT(request: NextRequest) {
       success: true,
       university: updated,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update university';
     return NextResponse.json(
-      { error: error.message || 'Failed to update university' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -119,16 +147,17 @@ export async function PATCH(request: NextRequest) {
     const { id, name, campuses } = await request.json();
     if (!id) return NextResponse.json({ error: 'University ID is required' }, { status: 400 });
 
-    const updates: any = {};
+    const updates: UniversityUpdate = {};
     if (name !== undefined) updates.name = name;
-    if (campuses !== undefined) updates.campuses = campuses;
+    if (campuses !== undefined) updates.campuses = normalizeCampuses(campuses);
 
-    const updated = updateUniversity(id, updates);
+    const updated = await updateUniversityInTelegramStore(id, updates);
     if (!updated) return NextResponse.json({ error: 'University not found' }, { status: 404 });
 
     return NextResponse.json({ success: true, university: updated });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to update university' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update university';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -144,13 +173,12 @@ export async function DELETE(request: NextRequest) {
     const id = url.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'University ID is required' }, { status: 400 });
 
-    const univs = getUniversities();
-    const exists = univs.find((u: any) => u.id === id);
-    if (!exists) return NextResponse.json({ error: 'University not found' }, { status: 404 });
+    const deleted = await deleteUniversityFromTelegramStore(id);
+    if (!deleted) return NextResponse.json({ error: 'University not found' }, { status: 404 });
 
-    deleteUniversity(id);
     return NextResponse.json({ success: true, message: 'University deleted successfully' });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to delete university' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to delete university';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

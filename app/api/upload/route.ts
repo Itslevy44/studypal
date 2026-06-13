@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/auth';
-import { addPaper, getUniversityById } from '@/lib/dataStore';
+import { addPaper } from '@/lib/dataStore';
+import { getUniversityFromTelegramStore } from '@/lib/universitiesTelegram';
 import { uploadToTelegram } from '@/lib/telegram';
 import crypto from 'crypto';
 
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Telegram
-    const universityName = getUniversityById(university)?.name || university;
+    const universityRecord = await getUniversityFromTelegramStore(university);
+    const universityName = universityRecord?.name || university;
     const telegramMetadata = {
       app: 'studypal_archive',
       university: universityName,
@@ -108,10 +110,11 @@ export async function POST(request: NextRequest) {
       paper: paperRecord
     }, { status: 201 });
 
-  } catch (error: any) {
-    console.error('Upload route error:', error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    console.error('Upload route error:', message);
     return NextResponse.json(
-      { error: error.message || 'Internal Server Error' },
+      { error: message },
       { status: 500 }
     );
   }

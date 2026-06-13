@@ -1,8 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+type AdminStats = {
+  paperCount: number;
+  universityCount: number;
+  studentCount: number;
+  activeSubscriptionCount: number;
+  pendingPaymentCount: number;
+  paperRevenue: number;
+  marketplaceRevenue: number;
+  totalRevenue: number;
+};
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -15,34 +26,58 @@ export default function AdminDashboard() {
   const [revenue, setRevenue] = useState(0);
   const [universityCount, setUniversityCount] = useState(0);
   const [studentCount, setStudentCount] = useState(0);
-
-  const fetchDashboardStats = async () => {
-    try {
-      const adminToken = localStorage.getItem('adminToken');
-      const [papersResponse, universitiesResponse, studentsResponse] = await Promise.all([
-        fetch('/api/papers'),
-        fetch('/api/universities'),
-        fetch('/api/auth/students', { headers: { Authorization: `Bearer ${adminToken}` } }),
-      ]);
-      const papersData = await papersResponse.json();
-      const universitiesData = await universitiesResponse.json();
-      const studentsData = await studentsResponse.json();
-      const papers = papersData.papers || [];
-      setPaperCount(papers.length);
-      setRevenue(papers.reduce((sum: number, paper: any) => sum + (Number(paper.cost) || 0), 0));
-      setUniversityCount((universitiesData.universities || []).length);
-      setStudentCount(studentsData.count || 0);
-    } catch (error) {
-      console.error('Failed to load admin stats:', error);
-    }
-  };
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
     if (adminToken) setIsLoggedIn(true);
     setLoading(false);
-    fetchDashboardStats();
   }, []);
+
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const adminToken = localStorage.getItem('adminToken');
+      if (!adminToken) {
+        setStatsError('Admin token is missing. Please sign in again.');
+        return;
+      }
+
+      setStatsLoading(true);
+      setStatsError('');
+
+      const response = await fetch('/api/admin/stats', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+
+      const data: AdminStats = await response.json();
+
+      if (!response.ok) {
+        throw new Error((data as any)?.error || 'Failed to load live dashboard data.');
+      }
+
+      setPaperCount(data.paperCount || 0);
+      setUniversityCount(data.universityCount || 0);
+      setStudentCount(data.studentCount || 0);
+      setRevenue(data.totalRevenue || 0);
+      setLastUpdated(new Date());
+    } catch (error: any) {
+      console.error('Failed to load admin stats:', error);
+      setStatsError(error?.message || 'Failed to load live dashboard data.');
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn || tab !== 'dashboard') return;
+
+    fetchDashboardStats();
+    const interval = setInterval(fetchDashboardStats, 30000);
+
+    return () => clearInterval(interval);
+  }, [isLoggedIn, tab, fetchDashboardStats]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +96,7 @@ export default function AdminDashboard() {
       localStorage.setItem('adminToken', data.token);
       setIsLoggedIn(true);
       setAdminPassword('');
+      fetchDashboardStats();
     } catch (error: any) {
       setLoginMessage(error.message || 'Connection error');
     }
@@ -217,21 +253,33 @@ export default function AdminDashboard() {
           {tab === 'dashboard' && (
             <div className="animate-fade-in">
               {/* Welcome Banner */}
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-700 p-8 mb-8 shadow-xl shadow-indigo-500/20">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
-                <div className="relative z-10">
-                  <p className="text-indigo-200 text-sm font-bold uppercase tracking-widest mb-2">Admin Dashboard</p>
-                  <h2 className="text-3xl font-black text-white mb-1">Platform Overview</h2>
-                  <p className="text-indigo-200">Key metrics and statistics for StudyPal.</p>
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-700 p-8 mb-8 shadow-xl shadow-indigo-500/20">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
+                  <div className="relative z-10 flex items-start justify-between gap-6">
+                    <div>
+                      <p className="text-indigo-200 text-sm font-bold uppercase tracking-widest mb-2">Admin Dashboard</p>
+                      <h2 className="text-3xl font-black text-white mb-1">Platform Overview</h2>
+                      <p className="text-indigo-200">Live metrics and statistics for StudyPal.</p>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20">
+                      <span className={`h-2 w-2 rounded-full ${statsLoading ? 'bg-amber-300 animate-pulse' : 'bg-emerald-300'}`} />
+                      {statsLoading ? 'Syncing' : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Ready'}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                {statsError && (
+                  <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+                    {statsError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {[
-                  { label: 'Total Papers', value: paperCount, icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', color: 'text-indigo-600', bg: 'bg-indigo-50', display: String(paperCount) },
-                  { label: 'Universities', value: universityCount, icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', display: String(universityCount) },
-                  { label: 'Paper Revenue', value: revenue, icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-emerald-600', bg: 'bg-emerald-50', display: `KES ${revenue.toLocaleString()}` },
-                  { label: 'Registered Students', value: studentCount, icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', color: 'text-sky-600', bg: 'bg-sky-50', display: String(studentCount) },
+                  { label: 'Total Papers', value: paperCount, icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', color: 'text-indigo-600', bg: 'bg-indigo-50', display: statsLoading ? '...' : String(paperCount) },
+                  { label: 'Universities', value: universityCount, icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', display: statsLoading ? '...' : String(universityCount) },
+                  { label: 'Total Revenue', value: revenue, icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-emerald-600', bg: 'bg-emerald-50', display: statsLoading ? '...' : `KES ${revenue.toLocaleString()}` },
+                  { label: 'Registered Students', value: studentCount, icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', color: 'text-sky-600', bg: 'bg-sky-50', display: statsLoading ? '...' : String(studentCount) },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                     <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center mb-4`}>
