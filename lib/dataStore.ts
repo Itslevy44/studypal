@@ -207,11 +207,10 @@ export const getSubscriptionsByUser = (userId: string) => {
   return subs.filter((s: any) => s.userId === userId);
 };
 
-export const checkPaperAccess = (userId: string, paperId: string) => {
+export const checkPaperAccess = (userId: string, paperId?: string) => {
   const subs = getSubscriptions();
   const sub = subs.find((s: any) => 
     s.userId === userId && 
-    s.paperId === paperId && 
     s.status === 'active' &&
     new Date(s.expiryDate) > new Date()
   );

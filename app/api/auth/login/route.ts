@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPassword, createToken } from '@/lib/auth';
-import { getUserByEmail } from '@/lib/dataStore';
+import { getUserByEmail, checkPaperAccess } from '@/lib/dataStore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         campus: user.campus,
         yearOfStudy: user.yearOfStudy,
         role: user.role,
+        hasActiveSubscription: checkPaperAccess(user.id),
       },
     });
   } catch (error: any) {

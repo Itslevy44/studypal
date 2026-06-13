@@ -46,6 +46,7 @@ export default function StudentDashboard() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhonePrompt, setShowPhonePrompt] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<{ id: string; status: 'loading' | 'success' | 'error'; message: string } | null>(null);
+  const [downloadingPaper, setDownloadingPaper] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -59,6 +60,20 @@ export default function StudentDashboard() {
 
     const fetchPageData = async () => {
       try {
+        // Fetch fresh user data to see if they have an active subscription
+        const meResponse = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        let freshUser = parsedUser;
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          if (meData.success && meData.user) {
+            freshUser = meData.user;
+            setUser(freshUser);
+            localStorage.setItem('user', JSON.stringify(freshUser));
+          }
+        }
+
         const [papersRes, universitiesRes] = await Promise.all([
           fetch('/api/papers'),
           fetch('/api/universities'),
@@ -70,9 +85,9 @@ export default function StudentDashboard() {
         setFreePaperCount(papers.filter((p) => p.cost === 0).length);
         setRecentPapers(papers.slice(0, 6));
         const university = (universitiesData.universities || []).find(
-          (item: University) => item.id === parsedUser.university
+          (item: University) => item.id === freshUser.university
         );
-        setUniversityName(university?.name || parsedUser.university || 'Your University');
+        setUniversityName(university?.name || freshUser.university || 'Your University');
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       } finally {
@@ -88,24 +103,68 @@ export default function StudentDashboard() {
     setPhoneNumber('');
   };
 
+  const handleDownload = async (paper: Paper) => {
+    setDownloadingPaper(paper.id);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/papers/${paper.id}/download`, {
+        headers: { Authorization: token ? `Bearer ${token}` : '' },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(err.error || 'Download failed');
+        return;
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        alert('Paper available — file storage coming soon.');
+        return;
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] || `${paper.course}_${paper.examPeriod}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(error?.message || 'Download failed');
+    } finally {
+      setDownloadingPaper(null);
+    }
+  };
+
   const submitMpesaPayment = async (paper: Paper) => {
     if (!phoneNumber) return;
     setBuyingPaper(paper.id);
     setPaymentStatus({ id: paper.id, status: 'loading', message: 'Initiating M-Pesa STK Push…' });
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/mpesa/stkpush', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : '',
+        },
         body: JSON.stringify({
           phoneNumber,
-          amount: paper.cost,
-          accountReference: paper.id.substring(0, 10),
-          transactionDesc: `StudyPal: ${paper.course}`,
+          amount: 100,
+          accountReference: 'all_access',
+          transactionDesc: 'StudyPal: 3-Month All-Access Pass',
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to initiate payment');
-      setPaymentStatus({ id: paper.id, status: 'success', message: '✓ Check your phone and enter your M-Pesa PIN to complete.' });
+      setPaymentStatus({ id: paper.id, status: 'success', message: '✓ Check your phone and enter your M-Pesa PIN.' });
     } catch (error: any) {
       setPaymentStatus({ id: paper.id, status: 'error', message: error.message || 'Payment initiation failed.' });
     } finally {
@@ -247,9 +306,25 @@ export default function StudentDashboard() {
                 </div>
               ) : (
                 <div className="flex gap-2 mt-auto">
-                  {paper.cost === 0 ? (
-                    <button className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 transition-all">
-                      Access Free
+                  {paper.cost === 0 || (user as any)?.hasActiveSubscription ? (
+                    <button
+                      onClick={() => handleDownload(paper)}
+                      disabled={downloadingPaper === paper.id}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold py-2.5 transition-all shadow-md shadow-emerald-500/20"
+                    >
+                      {downloadingPaper === paper.id ? (
+                        <>
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          Downloading…
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          {paper.cost === 0 ? 'Download Free' : 'Download'}
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
@@ -259,7 +334,7 @@ export default function StudentDashboard() {
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
-                      Buy – KES {paper.cost}
+                      Unlock All – KES 100
                     </button>
                   )}
                 </div>

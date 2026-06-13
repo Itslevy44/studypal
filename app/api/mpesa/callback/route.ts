@@ -55,10 +55,6 @@ export async function POST(req: Request) {
       // Fallback paperId from AccountReference if missing from pending
       const paperId = matchedPaperId || stkCallback.AccountReference || null;
 
-      // Create a subscription record to grant access
-      const expiryDate = new Date();
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year access
-
       if (matchedUserIdFinal && paperId) {
         const isItem = String(paperId).startsWith('item_');
 
@@ -66,15 +62,14 @@ export async function POST(req: Request) {
           updateMarketplaceItem(paperId, { status: 'sold' });
           console.log(`[M-Pesa] ✅ Marketplace item ${paperId} marked as sold. Buyer: ${matchedUserIdFinal}, Receipt: ${receiptNumber}`);
         } else {
-          // Resolve full paperId if it was a partial substring
-          const papers = readJsonFile('papers.json') || [];
-          const matchedPaper = papers.find((p: any) => p.id === paperId || p.id.startsWith(paperId));
-          const finalPaperId = matchedPaper ? matchedPaper.id : paperId;
+          // Grant 3 months access for past papers
+          const expiryDate = new Date();
+          expiryDate.setMonth(expiryDate.getMonth() + 3); // 3 months access
 
           addSubscription({
             id: `sub_${Date.now()}`,
             userId: matchedUserIdFinal,
-            paperId: finalPaperId,
+            paperId: 'all_access',
             status: 'active',
             expiryDate: expiryDate.toISOString(),
             receiptNumber,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/auth';
-import { getUserById } from '@/lib/dataStore';
+import { getUserById, checkPaperAccess } from '@/lib/dataStore';
 
 /**
  * GET /api/auth/me
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         yearOfStudy: user.yearOfStudy,
         role: user.role,
         phone: user.phone,
+        hasActiveSubscription: checkPaperAccess(user.id),
       },
     });
   } catch (error: any) {

@@ -48,7 +48,6 @@ export default function PapersBrowsePage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    const purchased = localStorage.getItem('purchasedPapers');
 
     if (!token || !userData) {
       router.push('/auth/login');
@@ -57,9 +56,24 @@ export default function PapersBrowsePage() {
 
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
-    if (purchased) {
-      try { setPurchasedPapers(JSON.parse(purchased)); } catch {}
-    }
+
+    const fetchFreshUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            setUser(data.user);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch user:', e);
+      }
+    };
+    fetchFreshUser();
 
     // Default to user's university
     const userUniv = parsedUser.university || '';
@@ -125,7 +139,7 @@ export default function PapersBrowsePage() {
   };
 
   const hasAccess = (paper: Paper) => {
-    return paper.cost === 0 || purchasedPapers.includes(paper.id);
+    return paper.cost === 0 || !!user?.hasActiveSubscription;
   };
 
   const submitMpesaPayment = async () => {
@@ -150,9 +164,9 @@ export default function PapersBrowsePage() {
         },
         body: JSON.stringify({
           phoneNumber,
-          amount: paper.cost,
-          accountReference: paper.id.substring(0, 10),
-          transactionDesc: `StudyPal: ${paper.course}`,
+          amount: 100,
+          accountReference: 'all_access',
+          transactionDesc: 'StudyPal: 3-Month All-Access Pass',
         }),
       });
 
@@ -166,11 +180,11 @@ export default function PapersBrowsePage() {
 
       // Optimistically grant access after a few seconds (real access granted via callback)
       setTimeout(() => {
-        const updated = [...purchasedPapers, paper.id];
-        setPurchasedPapers(updated);
-        localStorage.setItem('purchasedPapers', JSON.stringify(updated));
+        const updated = { ...user, hasActiveSubscription: true };
+        setUser(updated);
+        localStorage.setItem('user', JSON.stringify(updated));
         setShowPaymentModal(null);
-        setMessage({ text: `Payment initiated for "${paper.title}". Check your phone to complete.`, isError: false });
+        setMessage({ text: `Payment initiated successfully. Check your phone to complete.`, isError: false });
       }, 3000);
     } catch (error: any) {
       setPaymentStatus({ status: 'error', message: error?.message || 'Payment initiation failed.' });
@@ -545,7 +559,7 @@ export default function PapersBrowsePage() {
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
-                            Buy — KES {paper.cost}
+                            Unlock All — KES 100
                           </button>
                         )}
                       </div>
@@ -566,7 +580,7 @@ export default function PapersBrowsePage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-xl font-black text-slate-900">Pay via M-Pesa</h3>
-                <p className="text-sm text-slate-500 mt-0.5">{showPaymentModal.title}</p>
+                <p className="text-sm text-slate-500 mt-0.5">3-Month All-Access Pass</p>
               </div>
               <button
                 onClick={() => { setShowPaymentModal(null); setPaymentStatus(null); }}
@@ -579,8 +593,8 @@ export default function PapersBrowsePage() {
             {/* Price Tag */}
             <div className="bg-gradient-to-r from-indigo-50 to-fuchsia-50 border border-indigo-100 rounded-2xl p-4 mb-6 flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest">Amount</p>
-                <p className="text-3xl font-black text-indigo-700">KES {showPaymentModal.cost}</p>
+                <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest">Access Duration</p>
+                <p className="text-3xl font-black text-indigo-700">KES 100 <span className="text-sm font-normal text-slate-500">/ 3 Months</span></p>
               </div>
               <div className="h-12 w-12 rounded-xl bg-indigo-100 flex items-center justify-center">
                 <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -634,7 +648,7 @@ export default function PapersBrowsePage() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
-                    Pay KES {showPaymentModal.cost}
+                    Pay KES 100
                   </>
                 )}
               </button>

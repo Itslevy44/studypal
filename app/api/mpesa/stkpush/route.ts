@@ -33,18 +33,23 @@ export async function POST(req: Request) {
       ? 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
       : 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
 
+    const isItem = String(accountReference).startsWith('item_');
+    const paymentAmount = isItem ? amount : 100;
+    const paymentDesc = isItem ? (transactionDesc || 'Marketplace Item') : 'StudyPal: 3-Month All-Access Pass';
+    const paymentRef = isItem ? (accountReference || 'item') : 'all_access';
+
     const payload = {
       BusinessShortCode: shortcode,
       Password: password,
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
-      Amount: amount,
+      Amount: paymentAmount,
       PartyA: formattedPhone,
       PartyB: shortcode,
       PhoneNumber: formattedPhone,
       CallBackURL: process.env.MPESA_CALLBACK_URL || 'https://mydomain.com/api/mpesa/callback',
-      AccountReference: accountReference || 'StudyPal',
-      TransactionDesc: transactionDesc || 'Payment for Past Paper',
+      AccountReference: paymentRef,
+      TransactionDesc: paymentDesc,
     };
 
     const authHeader = req.headers.get('authorization');
@@ -80,17 +85,12 @@ export async function POST(req: Request) {
     // Record the pending transaction mapping CheckoutRequestID -> { userId, paperId }
     if (data.CheckoutRequestID) {
       try {
-        const isItem = String(accountReference).startsWith('item_');
-        let resolvedId = accountReference || 'unknown';
+        let resolvedId = paymentRef;
 
         if (isItem) {
           const items = getMarketplaceItems() || [];
           const matchedItem = items.find((i: any) => i.id === accountReference || i.id.startsWith(accountReference));
           if (matchedItem) resolvedId = matchedItem.id;
-        } else {
-          const papers = getPapers() || [];
-          const matchedPaper = papers.find((p: any) => p.id === accountReference || p.id.startsWith(accountReference));
-          if (matchedPaper) resolvedId = matchedPaper.id;
         }
 
         const pendingPayments = readJsonFile('pending_payments.json') || [];
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
           checkoutRequestId: data.CheckoutRequestID,
           userId: decoded?.userId || null,
           paperId: resolvedId,
-          amount: amount,
+          amount: paymentAmount,
           createdAt: new Date().toISOString(),
         });
         writeJsonFile('pending_payments.json', pendingPayments);
