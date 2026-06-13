@@ -79,7 +79,7 @@ export async function POST(req: Request) {
           
           // Find user email for logging if possible
           const fullUser = getUsers().find((u: any) => u.id === matchedUserIdFinal);
-          console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${finalPaperId}`);
+          console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${paperId}`);
         }
       } else {
         console.warn(`[M-Pesa] ⚠️ Could not match transaction ${checkoutRequestID} to a user or paper/item. User: ${matchedUserIdFinal}, ID: ${paperId}`);
