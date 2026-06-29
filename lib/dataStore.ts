@@ -150,6 +150,9 @@ const fetchIndexFromGithub = async (indexFilename: string): Promise<object | nul
   }
 };
 
+// Process-level cache to track if we've synced the index from GitHub on startup
+const startupSyncDone: Record<string, boolean> = {};
+
 // Generic Telegram-backed store collection helper functions
 export const getTelegramCollection = async <T>(
   filename: string,
@@ -159,13 +162,22 @@ export const getTelegramCollection = async <T>(
   const indexFilename = `${kind}_telegram.json`;
   let index = readJsonFile(indexFilename) as any;
 
-  // If no local index, try fetching from GitHub (covers fresh Vercel instances)
-  if (!index?.telegramFileId) {
+  // On process/container startup, fetch the latest index pointer from GitHub
+  // to ensure we don't use a stale packaged index file.
+  if (!startupSyncDone[kind]) {
+    console.log(`[Telegram Store ${kind}] Startup check: fetching latest index from GitHub...`);
+    const githubIndex = await fetchIndexFromGithub(indexFilename);
+    if (githubIndex) {
+      index = githubIndex;
+      // Cache it locally for subsequent requests in this container instance
+      try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
+    }
+    startupSyncDone[kind] = true;
+  } else if (!index?.telegramFileId) {
     console.log(`[Telegram Store ${kind}] No local index, fetching from GitHub...`);
     const githubIndex = await fetchIndexFromGithub(indexFilename);
     if (githubIndex) {
       index = githubIndex;
-      // Cache it locally for subsequent requests in this function instance
       try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
     }
   }
