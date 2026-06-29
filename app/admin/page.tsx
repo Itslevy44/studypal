@@ -369,6 +369,7 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCampusName, setEditCampusName] = useState('');
+  const [editCampuses, setEditCampuses] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -410,19 +411,20 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
   const handleEdit = async (univ: any) => {
     if (!editName.trim()) return;
     setSubmitting(true);
-    const newCampuses = editCampusName.trim()
-      ? [...(univ.campuses || []), { id: `c_${Date.now()}`, name: editCampusName.trim(), location: '' }]
-      : univ.campuses || [];
+    let finalCampuses = [...editCampuses];
+    if (editCampusName.trim()) {
+      finalCampuses.push({ id: `c_${Date.now()}`, name: editCampusName.trim(), location: '' });
+    }
     try {
       const res = await fetch('/api/universities', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body: JSON.stringify({ id: univ.id, name: editName, campuses: newCampuses }),
+        body: JSON.stringify({ id: univ.id, name: editName, campuses: finalCampuses }),
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || 'Failed to update', true); return; }
       showMsg('✅ University updated successfully!');
-      setEditingId(null); setEditName(''); setEditCampusName('');
+      setEditingId(null); setEditName(''); setEditCampusName(''); setEditCampuses([]);
       fetchUniversities();
     } catch (err: any) { showMsg(err.message || 'Connection error', true); }
     finally { setSubmitting(false); }
@@ -495,17 +497,87 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
           {universities.map(univ => (
             <div key={univ.id} className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-indigo-200 hover:shadow-md transition-all">
               {editingId === univ.id ? (
-                <div className="space-y-3">
-                  <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                    placeholder="University name" className={INPUT_CLASS} disabled={submitting} />
-                  <input type="text" value={editCampusName} onChange={(e) => setEditCampusName(e.target.value)}
-                    placeholder="Add new campus (optional)" className={INPUT_CLASS} disabled={submitting} />
-                  <div className="flex gap-2 pt-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">University Name</label>
+                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                      placeholder="University name" className={INPUT_CLASS} disabled={submitting} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Campuses</label>
+                    {editCampuses.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No campuses added yet.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {editCampuses.map((c, index) => (
+                          <div key={c.id || index} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={c.name}
+                              onChange={(e) => {
+                                const updated = editCampuses.map((item, idx) =>
+                                  (c.id && item.id === c.id) || (!c.id && idx === index)
+                                    ? { ...item, name: e.target.value }
+                                    : item
+                                );
+                                setEditCampuses(updated);
+                              }}
+                              placeholder="Campus name"
+                              className={`${INPUT_CLASS} !py-2 !px-3 text-xs`}
+                              disabled={submitting}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const filtered = editCampuses.filter((item, idx) =>
+                                  c.id ? item.id !== c.id : idx !== index
+                                );
+                                setEditCampuses(filtered);
+                              }}
+                              className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all flex-shrink-0"
+                              title="Delete Campus"
+                              disabled={submitting}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Add Campus</label>
+                    <div className="flex gap-2">
+                      <input type="text" value={editCampusName} onChange={(e) => setEditCampusName(e.target.value)}
+                        placeholder="e.g. Town Campus" className={`${INPUT_CLASS} !py-2 !px-3 text-xs`} disabled={submitting} />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editCampusName.trim()) return;
+                          setEditCampuses([
+                            ...editCampuses,
+                            { id: `campus_${Date.now()}`, name: editCampusName.trim(), location: '' }
+                          ]);
+                          setEditCampusName('');
+                        }}
+                        className="px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all flex-shrink-0"
+                        disabled={submitting}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-slate-100">
                     <button onClick={() => handleEdit(univ)} disabled={submitting}
                       className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       {submitting ? 'Saving...' : '✓ Save'}
                     </button>
-                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCampusName(''); }} disabled={submitting}
+                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCampusName(''); setEditCampuses([]); }} disabled={submitting}
                       className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       Cancel
                     </button>
@@ -527,7 +599,7 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
                       {(!univ.campuses || univ.campuses.length === 0) && <span className="text-xs text-slate-400">No campuses</span>}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => { setEditingId(univ.id); setEditName(univ.name); setEditCampusName(''); }} disabled={deletingId !== null}
+                      <button onClick={() => { setEditingId(univ.id); setEditName(univ.name); setEditCampuses(univ.campuses ? [...univ.campuses] : []); setEditCampusName(''); }} disabled={deletingId !== null}
                         className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                         ✏️ Edit
                       </button>
