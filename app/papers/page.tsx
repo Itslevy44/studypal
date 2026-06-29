@@ -584,7 +584,8 @@ export default function PapersBrowsePage() {
               </div>
               <button
                 onClick={() => { setShowPaymentModal(null); setPaymentStatus(null); }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all"
+                disabled={buyingPaper !== null}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 ✕
               </button>
@@ -654,7 +655,8 @@ export default function PapersBrowsePage() {
               </button>
               <button
                 onClick={() => { setShowPaymentModal(null); setPaymentStatus(null); }}
-                className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all"
+                disabled={buyingPaper !== null}
+                className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>

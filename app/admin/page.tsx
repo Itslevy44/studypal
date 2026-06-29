@@ -369,6 +369,8 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCampusName, setEditCampusName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => { fetchUniversities(); }, []);
 
@@ -389,6 +391,7 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       const res = await fetch('/api/universities', {
         method: 'POST',
@@ -396,15 +399,17 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
         body: JSON.stringify({ name, campuses: campusName ? [{ id: `c_${Date.now()}`, name: campusName, location: '' }] : [] }),
       });
       const data = await res.json();
-      if (!res.ok) { showMsg(data.error || 'Failed', true); return; }
-      showMsg('University added!');
+      if (!res.ok) { showMsg(data.error || 'Failed to add university', true); return; }
+      showMsg('✅ University added successfully!');
       setName(''); setCampusName(''); setShowForm(false);
       fetchUniversities();
-    } catch (err: any) { showMsg(err.message, true); }
+    } catch (err: any) { showMsg(err.message || 'Connection error', true); }
+    finally { setSubmitting(false); }
   };
 
   const handleEdit = async (univ: any) => {
     if (!editName.trim()) return;
+    setSubmitting(true);
     const newCampuses = editCampusName.trim()
       ? [...(univ.campuses || []), { id: `c_${Date.now()}`, name: editCampusName.trim(), location: '' }]
       : univ.campuses || [];
@@ -416,24 +421,27 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || 'Failed to update', true); return; }
-      showMsg('University updated!');
+      showMsg('✅ University updated successfully!');
       setEditingId(null); setEditName(''); setEditCampusName('');
       fetchUniversities();
-    } catch (err: any) { showMsg(err.message, true); }
+    } catch (err: any) { showMsg(err.message || 'Connection error', true); }
+    finally { setSubmitting(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this university? This cannot be undone.')) return;
+    setDeletingId(id);
     try {
       const res = await fetch(`/api/universities?id=${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const data = await res.json();
-      if (!res.ok) { showMsg(data.error || 'Failed to delete', true); return; }
-      showMsg('University deleted.');
+      if (!res.ok) { showMsg(data.error || 'Failed to delete university', true); return; }
+      showMsg('✅ University deleted successfully.');
       fetchUniversities();
-    } catch (err: any) { showMsg(err.message, true); }
+    } catch (err: any) { showMsg(err.message || 'Connection error', true); }
+    finally { setDeletingId(null); }
   };
 
   const btnClass = 'px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg';
@@ -469,8 +477,8 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">First Campus (optional)</label>
               <input type="text" value={campusName} onChange={(e) => setCampusName(e.target.value)} placeholder="e.g. Main Campus" className={INPUT_CLASS} />
             </div>
-            <button type="submit" className="w-full py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 shadow-lg transition-all hover:scale-[1.01]">
-              Add University
+            <button type="submit" disabled={submitting} className="w-full py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 shadow-lg transition-all hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed">
+              {submitting ? 'Adding university...' : 'Add University'}
             </button>
           </div>
         </form>
@@ -489,16 +497,16 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
               {editingId === univ.id ? (
                 <div className="space-y-3">
                   <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                    placeholder="University name" className={INPUT_CLASS} />
+                    placeholder="University name" className={INPUT_CLASS} disabled={submitting} />
                   <input type="text" value={editCampusName} onChange={(e) => setEditCampusName(e.target.value)}
-                    placeholder="Add new campus (optional)" className={INPUT_CLASS} />
+                    placeholder="Add new campus (optional)" className={INPUT_CLASS} disabled={submitting} />
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => handleEdit(univ)}
-                      className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">
-                      ✓ Save
+                    <button onClick={() => handleEdit(univ)} disabled={submitting}
+                      className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                      {submitting ? 'Saving...' : '✓ Save'}
                     </button>
-                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCampusName(''); }}
-                      className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-all">
+                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCampusName(''); }} disabled={submitting}
+                      className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       Cancel
                     </button>
                   </div>
@@ -519,13 +527,13 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
                       {(!univ.campuses || univ.campuses.length === 0) && <span className="text-xs text-slate-400">No campuses</span>}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => { setEditingId(univ.id); setEditName(univ.name); setEditCampusName(''); }}
-                        className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all">
+                      <button onClick={() => { setEditingId(univ.id); setEditName(univ.name); setEditCampusName(''); }} disabled={deletingId !== null}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                         ✏️ Edit
                       </button>
-                      <button onClick={() => handleDelete(univ.id)}
-                        className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all">
-                        🗑️ Delete
+                      <button onClick={() => handleDelete(univ.id)} disabled={deletingId !== null}
+                        className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        {deletingId === univ.id ? 'Deleting...' : '🗑️ Delete'}
                       </button>
                     </div>
                   </div>
@@ -736,6 +744,8 @@ function StoreManager({ adminToken }: { adminToken: string }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -761,8 +771,15 @@ function StoreManager({ adminToken }: { adminToken: string }) {
     fetchItems();
   }, []);
 
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
   const handleToggleStatus = async (itemId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'available' ? 'sold' : 'available';
+    setUpdatingItemId(itemId);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch('/api/marketplace/items', {
         method: 'PATCH',
@@ -772,19 +789,24 @@ function StoreManager({ adminToken }: { adminToken: string }) {
         },
         body: JSON.stringify({ id: itemId, status: nextStatus }),
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg(`✅ Item status updated to ${nextStatus}!`);
         fetchItems();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to update status');
+        showMsg(data.error || 'Failed to update status', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error updating status', true);
+    } finally {
+      setUpdatingItemId(null);
     }
   };
 
   const handleDeleteItem = async (itemId: string) => {
     if (!confirm('Are you sure you want to delete this marketplace item?')) return;
+    setDeletingItemId(itemId);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch(`/api/marketplace/items?id=${itemId}`, {
         method: 'DELETE',
@@ -792,14 +814,17 @@ function StoreManager({ adminToken }: { adminToken: string }) {
           Authorization: `Bearer ${adminToken}`,
         },
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg('✅ Marketplace item deleted successfully!');
         fetchItems();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to delete item');
+        showMsg(data.error || 'Failed to delete item', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error deleting item', true);
+    } finally {
+      setDeletingItemId(null);
     }
   };
 
@@ -960,16 +985,18 @@ function StoreManager({ adminToken }: { adminToken: string }) {
                   <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
                     <button
                       onClick={() => handleToggleStatus(i.id, i.status)}
-                      className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
+                      disabled={updatingItemId !== null || deletingItemId !== null}
+                      className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      🔄 Mark {i.status === 'available' ? 'Sold' : 'Available'}
+                      {updatingItemId === i.id ? 'Updating...' : `🔄 Mark ${i.status === 'available' ? 'Sold' : 'Available'}`}
                     </button>
                     <button
                       onClick={() => handleDeleteItem(i.id)}
-                      className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
+                      disabled={updatingItemId !== null || deletingItemId !== null}
+                      className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete Item"
                     >
-                      🗑️
+                      {deletingItemId === i.id ? '...' : '🗑️'}
                     </button>
                   </div>
                 </div>
@@ -988,6 +1015,8 @@ function AdsManager({ adminToken }: { adminToken: string }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
+  const [updatingAdId, setUpdatingAdId] = useState<string | null>(null);
+  const [deletingAdId, setDeletingAdId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -1015,8 +1044,15 @@ function AdsManager({ adminToken }: { adminToken: string }) {
     fetchAds();
   }, []);
 
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
   const handleToggleAdStatus = async (adId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    setUpdatingAdId(adId);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch('/api/marketplace/advertisements', {
         method: 'PATCH',
@@ -1026,19 +1062,24 @@ function AdsManager({ adminToken }: { adminToken: string }) {
         },
         body: JSON.stringify({ id: adId, status: nextStatus }),
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg(`✅ Advertisement status updated to ${nextStatus}!`);
         fetchAds();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to update status');
+        showMsg(data.error || 'Failed to update status', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error updating status', true);
+    } finally {
+      setUpdatingAdId(null);
     }
   };
 
   const handleDeleteAd = async (adId: string) => {
     if (!confirm('Are you sure you want to delete this advertisement?')) return;
+    setDeletingAdId(adId);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch(`/api/marketplace/advertisements?id=${adId}`, {
         method: 'DELETE',
@@ -1046,19 +1087,24 @@ function AdsManager({ adminToken }: { adminToken: string }) {
           Authorization: `Bearer ${adminToken}`,
         },
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg('✅ Advertisement banner deleted successfully!');
         fetchAds();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to delete advertisement');
+        showMsg(data.error || 'Failed to delete advertisement', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error deleting advertisement', true);
+    } finally {
+      setDeletingAdId(null);
     }
   };
 
   const handleEditAd = async (ad: any) => {
     if (!editTitle.trim()) return;
+    setSubmitting(true);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch('/api/marketplace/advertisements', {
         method: 'PATCH',
@@ -1073,15 +1119,18 @@ function AdsManager({ adminToken }: { adminToken: string }) {
           linkUrl: editLinkUrl,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg('✅ Advertisement updated successfully!');
         setEditingId(null);
         fetchAds();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to update advertisement');
+        showMsg(data.error || 'Failed to update advertisement', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error updating advertisement', true);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1237,13 +1286,15 @@ function AdsManager({ adminToken }: { adminToken: string }) {
                     <div className="flex gap-2 pt-3 border-t border-slate-100">
                       <button
                         onClick={() => handleEditAd(ad)}
-                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all"
+                        disabled={submitting}
+                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        ✓ Save
+                        {submitting ? 'Saving...' : '✓ Save'}
                       </button>
                       <button
                         onClick={() => { setEditingId(null); setEditTitle(''); setEditDescription(''); setEditLinkUrl(''); }}
-                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all"
+                        disabled={submitting}
+                        className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Cancel
                       </button>
@@ -1258,22 +1309,25 @@ function AdsManager({ adminToken }: { adminToken: string }) {
                       <div className="flex gap-2 pt-3 border-t border-slate-100">
                         <button
                           onClick={() => { setEditingId(ad.id); setEditTitle(ad.title); setEditDescription(ad.description || ''); setEditLinkUrl(ad.linkUrl || ''); }}
-                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-all flex items-center justify-center gap-1"
+                          disabled={updatingAdId !== null || deletingAdId !== null}
+                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           ✏️ Edit
                         </button>
                         <button
                           onClick={() => handleToggleAdStatus(ad.id, ad.status)}
-                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1"
+                          disabled={updatingAdId !== null || deletingAdId !== null}
+                          className="flex-1 text-[11px] font-bold py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          🔄 Toggle State
+                          {updatingAdId === ad.id ? 'Updating...' : '🔄 Toggle State'}
                         </button>
                         <button
                           onClick={() => handleDeleteAd(ad.id)}
-                          className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm"
+                          disabled={updatingAdId !== null || deletingAdId !== null}
+                          className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Delete Ad"
                         >
-                          🗑️
+                          {deletingAdId === ad.id ? '...' : '🗑️'}
                         </button>
                       </div>
                     </>
@@ -1359,6 +1413,7 @@ function NoticesManager({ adminToken }: { adminToken: string }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
+  const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -1386,8 +1441,15 @@ function NoticesManager({ adminToken }: { adminToken: string }) {
     fetchNoticesAndUnivs();
   }, []);
 
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
   const handleDeleteNotice = async (noticeId: string) => {
     if (!confirm('Are you sure you want to delete this announcement/notice?')) return;
+    setDeletingNoticeId(noticeId);
+    setMessage({ text: '', isError: false });
     try {
       const res = await fetch(`/api/marketplace/notices?id=${noticeId}`, {
         method: 'DELETE',
@@ -1395,14 +1457,17 @@ function NoticesManager({ adminToken }: { adminToken: string }) {
           Authorization: `Bearer ${adminToken}`,
         },
       });
+      const data = await res.json();
       if (res.ok) {
+        showMsg('✅ Announcement deleted successfully!');
         fetchNoticesAndUnivs();
       } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to delete notice');
+        showMsg(data.error || 'Failed to delete notice', true);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showMsg(err.message || 'Error deleting notice', true);
+    } finally {
+      setDeletingNoticeId(null);
     }
   };
 
@@ -1523,10 +1588,11 @@ function NoticesManager({ adminToken }: { adminToken: string }) {
                   </div>
                   <button
                     onClick={() => handleDeleteNotice(n.id)}
-                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-xs flex-shrink-0"
+                    disabled={deletingNoticeId !== null}
+                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all text-xs flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Delete Notice"
                   >
-                    🗑️ Delete
+                    {deletingNoticeId === n.id ? 'Deleting...' : '🗑️ Delete'}
                   </button>
                 </div>
               );

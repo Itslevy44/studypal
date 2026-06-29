@@ -547,7 +547,8 @@ export default function MarketplacePage() {
               </div>
               <button
                 onClick={() => { setShowPaymentModal(null); setPaymentStatus(null); }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
+                disabled={!!buyingItem}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 ✕
               </button>
@@ -587,13 +588,14 @@ export default function MarketplacePage() {
               <button
                 onClick={submitMpesaPayment}
                 disabled={buyingItem === showPaymentModal.id || !phoneNumber || paymentStatus?.status === 'success'}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 text-white font-bold text-sm py-3 transition-all shadow-lg shadow-fuchsia-500/25 disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 text-white font-bold text-sm py-3 transition-all shadow-lg shadow-fuchsia-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {buyingItem === showPaymentModal.id ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Sending…</> : `Pay KES ${showPaymentModal.price}`}
               </button>
               <button
                 onClick={() => { setShowPaymentModal(null); setPaymentStatus(null); }}
-                className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all"
+                disabled={!!buyingItem}
+                className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
