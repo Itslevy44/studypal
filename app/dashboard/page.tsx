@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { savePaperOffline } from '@/lib/indexedDB';
 
 interface User {
   id: string;
@@ -103,6 +104,8 @@ export default function StudentDashboard() {
     setPhoneNumber('');
   };
 
+  const [savedPaperId, setSavedPaperId] = useState<string | null>(null);
+
   const handleDownload = async (paper: Paper) => {
     setDownloadingPaper(paper.id);
     try {
@@ -123,21 +126,23 @@ export default function StudentDashboard() {
         return;
       }
 
+      // Save blob to IndexedDB (in-app offline storage) instead of device
       const blob = await response.blob();
-      const disposition = response.headers.get('content-disposition') || '';
-      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
-      const filename = filenameMatch?.[1] || `${paper.course}_${paper.examPeriod}.pdf`;
+      await savePaperOffline({
+        id: paper.id,
+        title: paper.title,
+        course: paper.course,
+        examPeriod: paper.examPeriod,
+        yearOfStudy: paper.yearOfStudy,
+        fileSize: paper.fileSize,
+        blob,
+      });
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Show success banner instead of device download
+      setSavedPaperId(paper.id);
+      setTimeout(() => setSavedPaperId(null), 6000);
     } catch (error: any) {
-      alert(error?.message || 'Download failed');
+      alert(error?.message || 'Failed to save paper offline');
     } finally {
       setDownloadingPaper(null);
     }
@@ -187,6 +192,20 @@ export default function StudentDashboard() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto animate-fade-in">
+
+      {/* Offline save success toast */}
+      {savedPaperId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-sm font-semibold px-6 py-4 rounded-2xl shadow-2xl shadow-emerald-500/30 flex items-center gap-3 animate-fade-in">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>📥 Saved to Offline Downloads!</span>
+          <Link href="/dashboard/downloads" className="underline font-bold hover:text-emerald-100 transition-colors ml-1">
+            View Now
+          </Link>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-fuchsia-700 p-8 sm:p-10 mb-8 shadow-xl shadow-indigo-500/20">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
@@ -315,14 +334,14 @@ export default function StudentDashboard() {
                       {downloadingPaper === paper.id ? (
                         <>
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                          Downloading…
+                          Saving…
                         </>
                       ) : (
                         <>
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                           </svg>
-                          {paper.cost === 0 ? 'Download Free' : 'Download'}
+                          {paper.cost === 0 ? 'Save Offline (Free)' : 'Save Offline'}
                         </>
                       )}
                     </button>
