@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
   try {
-    const items = getMarketplaceItems() || [];
+    const items = (await getMarketplaceItems()) || [];
     // Sort items by upload date (newest first)
     const sorted = [...items].sort((a: any, b: any) => 
       new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       uploadedBy: tokenData.email
     };
 
-    addMarketplaceItem(itemRecord);
+    await addMarketplaceItem(itemRecord);
 
     return NextResponse.json({
       success: true,
@@ -114,7 +114,7 @@ export async function PATCH(request: NextRequest) {
     if (contactInfo !== undefined) updates.contactInfo = contactInfo;
     if (status !== undefined) updates.status = status;
 
-    const updated = updateMarketplaceItem(id, updates);
+    const updated = await updateMarketplaceItem(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
@@ -146,7 +146,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required parameter: id' }, { status: 400 });
     }
 
-    const item = getMarketplaceItemById(id);
+    const item = await getMarketplaceItemById(id);
     if (!item) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
@@ -160,7 +160,7 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    deleteMarketplaceItem(id);
+    await deleteMarketplaceItem(id);
 
     return NextResponse.json({
       success: true,

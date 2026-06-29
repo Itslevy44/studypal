@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Save paper record
-    addPaper(paperRecord);
+    await addPaper(paperRecord);
 
     return NextResponse.json({
       success: true,

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const showAll = url.searchParams.get('all') === 'true';
 
-    const ads = getAdvertisements() || [];
+    const ads = (await getAdvertisements()) || [];
     
     let returnedAds = ads;
     if (!showAll) {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       uploadedBy: tokenData.email
     };
 
-    addAdvertisement(adRecord);
+    await addAdvertisement(adRecord);
 
     return NextResponse.json({
       success: true,
@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest) {
     if (linkUrl !== undefined) updates.linkUrl = linkUrl;
     if (status !== undefined) updates.status = status;
 
-    const updated = updateAdvertisement(id, updates);
+    const updated = await updateAdvertisement(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Advertisement not found' }, { status: 404 });
     }
@@ -136,7 +136,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required parameter: id' }, { status: 400 });
     }
 
-    const ads = getAdvertisements();
+    const ads = await getAdvertisements();
     const ad = ads.find((a: any) => a.id === id);
     if (!ad) {
       return NextResponse.json({ error: 'Advertisement not found' }, { status: 404 });
@@ -151,7 +151,7 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    deleteAdvertisement(id);
+    await deleteAdvertisement(id);
 
     return NextResponse.json({
       success: true,

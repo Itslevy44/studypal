@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPapers, getPapersByUniversity, updatePaper, getPaperById, writeJsonFile, getUniversityById } from '@/lib/dataStore';
+import { getPapers, getPapersByUniversity, updatePaper, getPaperById, deletePaper, getUniversityById } from '@/lib/dataStore';
 import { verifyRequestToken } from '@/lib/auth';
 import { deleteFromTelegram } from '@/lib/telegram';
-
-// Helper: delete a paper by id
-const deletePaper = (id: string) => {
-  const papers = getPapers();
-  const filtered = papers.filter((p: any) => p.id !== id);
-  writeJsonFile('papers.json', filtered);
-  return true;
-};
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +14,7 @@ export async function GET(request: NextRequest) {
     const yearFilter = url.searchParams.get('year');
     const courseFilter = url.searchParams.get('course');
 
-    let papers = univFilter ? getPapersByUniversity(univFilter) : getPapers();
+    let papers = univFilter ? await getPapersByUniversity(univFilter) : await getPapers();
 
     // Apply filters
     if (yearFilter) {
@@ -33,11 +25,16 @@ export async function GET(request: NextRequest) {
       papers = papers.filter((p: any) => p.course.toLowerCase().includes(courseFilter.toLowerCase()));
     }
 
-    // Remove sensitive data
-    const safePapers = papers.map((p: any) => ({
-      ...p,
-      telegramMessageId: undefined, // Don't expose telegram IDs to clients
-    }));
+    const isAdmin = tokenData?.role === 'admin';
+
+    // Remove sensitive data from non-admin responses
+    const safePapers = papers.map((p: any) =>
+      isAdmin ? p : {
+        ...p,
+        telegramMessageId: undefined,
+        telegramFileId: undefined,
+      }
+    );
 
     return NextResponse.json({ papers: safePapers });
   } catch (error: any) {
@@ -60,10 +57,15 @@ export async function PATCH(request: NextRequest) {
     const { id, ...updates } = body;
     if (!id) return NextResponse.json({ error: 'Paper ID is required' }, { status: 400 });
 
-    const existing = getPaperById(id);
+    const existing = await getPaperById(id);
     if (!existing) return NextResponse.json({ error: 'Paper not found' }, { status: 404 });
 
-    const updated = updatePaper(id, updates);
+    const sanitizedUpdates = { ...updates };
+    if ('cost' in sanitizedUpdates) {
+      sanitizedUpdates.cost = Number(sanitizedUpdates.cost) || 0;
+    }
+
+    const updated = await updatePaper(id, sanitizedUpdates);
     return NextResponse.json({ success: true, paper: updated });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to update paper' }, { status: 500 });
@@ -82,7 +84,7 @@ export async function DELETE(request: NextRequest) {
     const id = url.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'Paper ID is required' }, { status: 400 });
 
-    const paper = getPaperById(id);
+    const paper = await getPaperById(id);
     if (!paper) return NextResponse.json({ error: 'Paper not found' }, { status: 404 });
 
     // Try deleting from Telegram
@@ -90,7 +92,7 @@ export async function DELETE(request: NextRequest) {
       try { await deleteFromTelegram(paper.telegramMessageId); } catch (_) {}
     }
 
-    deletePaper(id);
+    await deletePaper(id);
     return NextResponse.json({ success: true, message: 'Paper deleted successfully' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to delete paper' }, { status: 500 });

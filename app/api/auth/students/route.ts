@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 401 });
     }
 
-    const users = getUsers() || [];
+    const users = (await getUsers()) || [];
     const students = users.filter((u: any) => u.role === 'student' || !u.role || u.role === undefined);
 
     return NextResponse.json({

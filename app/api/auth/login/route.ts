@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         campus: user.campus,
         yearOfStudy: user.yearOfStudy,
         role: user.role,
-        hasActiveSubscription: checkPaperAccess(user.id),
+        hasActiveSubscription: await checkPaperAccess(user.id),
       },
     });
   } catch (error: any) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/auth';
-import { getMarketplaceItems, getSubscriptions, getUsers, getPapers, readJsonFile } from '@/lib/dataStore';
+import { getMarketplaceItems, getSubscriptions, getUsers, getPapers, getPendingPayments } from '@/lib/dataStore';
 import { getUniversitiesFromTelegramStore } from '@/lib/universitiesTelegram';
 
 const ALL_ACCESS_PRICE = 100;
@@ -49,12 +49,12 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
-    const users = getUsers() || [];
-    const papers = getPapers() || [];
+    const users = (await getUsers()) || [];
+    const papers = (await getPapers()) || [];
     const universities = await getUniversitiesFromTelegramStore();
-    const subscriptions = getSubscriptions() || [];
-    const marketplaceItems = getMarketplaceItems() || [];
-    const pendingPayments = readJsonFile('pending_payments.json') || [];
+    const subscriptions = (await getSubscriptions()) || [];
+    const marketplaceItems = (await getMarketplaceItems()) || [];
+    const pendingPayments = (await getPendingPayments()) || [];
 
     const students = users.filter((user: UserRecord) => isStudent(user));
     const activeSubscriptions = subscriptions.filter((sub: SubscriptionRecord) => isActiveAllAccessSubscription(sub, now));

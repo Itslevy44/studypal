@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const univFilter = url.searchParams.get('university');
 
-    const notices = getNotices() || [];
+    const notices = (await getNotices()) || [];
 
     // Filter notices if university is specified
     let filteredNotices = notices;
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       uploadedBy: tokenData.email
     };
 
-    addNotice(noticeRecord);
+    await addNotice(noticeRecord);
 
     return NextResponse.json({
       success: true,
@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest) {
     if (category !== undefined) updates.category = category;
     if (university !== undefined) updates.university = university;
 
-    const updated = updateNotice(id, updates);
+    const updated = await updateNotice(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
     }
@@ -121,13 +121,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required parameter: id' }, { status: 400 });
     }
 
-    const notices = getNotices();
+    const notices = await getNotices();
     const notice = notices.find((n: any) => n.id === id);
     if (!notice) {
       return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
     }
 
-    deleteNotice(id);
+    await deleteNotice(id);
 
     return NextResponse.json({
       success: true,

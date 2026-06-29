@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPassword, hashPassword, verifyRequestToken } from '@/lib/auth';
-import { getUserById, getUsers, writeJsonFile } from '@/lib/dataStore';
+import { getUserById, getUsers, updateUser } from '@/lib/dataStore';
 
 export async function PUT(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const user = getUserById(decoded.userId);
+    const user = await getUserById(decoded.userId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -24,31 +24,21 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
       }
       const newHash = await hashPassword(newPassword);
-      const users = getUsers();
-      const idx = users.findIndex((u: any) => u.id === user.id);
-      if (idx !== -1) {
-        users[idx] = { ...users[idx], passwordHash: newHash };
-        writeJsonFile('users.json', users);
-      }
+      await updateUser(user.id, { passwordHash: newHash });
       return NextResponse.json({ success: true, message: 'Password updated' });
     }
 
     // Handle profile update
-    const users = getUsers();
-    const idx = users.findIndex((u: any) => u.id === user.id);
-    if (idx === -1) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const updatedUser = {
-      ...users[idx],
+    const updatedUser = await updateUser(user.id, {
       ...(fullName && { fullName }),
       ...(campus !== undefined && { campus }),
       ...(yearOfStudy && { yearOfStudy }),
       ...(university && { university }),
-    };
-    users[idx] = updatedUser;
-    writeJsonFile('users.json', users);
+    });
+
+    if (!updatedUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
       success: true,

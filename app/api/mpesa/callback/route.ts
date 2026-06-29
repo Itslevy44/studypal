@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { addSubscription, getUsers, writeJsonFile, readJsonFile, updateMarketplaceItem } from '@/lib/dataStore';
+import { addSubscription, getUsers, updateMarketplaceItem, getPendingPayments, removePendingPayment } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       console.log(`[M-Pesa] ✅ Payment success | Receipt: ${receiptNumber} | Amount: KES ${amount} | Phone: ${phoneNumber} | RequestID: ${checkoutRequestID}`);
 
       // Read pending payments mapping CheckoutRequestID -> { userId, paperId }
-      const pendingPayments = readJsonFile('pending_payments.json') || [];
+      const pendingPayments = await getPendingPayments();
       const pendingIdx = pendingPayments.findIndex((p: any) => p.checkoutRequestId === checkoutRequestID);
       
       let matchedUserId = null;
@@ -33,15 +33,14 @@ export async function POST(req: Request) {
         matchedUserId = pending.userId;
         matchedPaperId = pending.paperId;
         // Remove from pending list
-        pendingPayments.splice(pendingIdx, 1);
-        writeJsonFile('pending_payments.json', pendingPayments);
+        await removePendingPayment(checkoutRequestID);
         console.log(`[M-Pesa] Match found in pending_payments for request: ${checkoutRequestID}. User: ${matchedUserId}, Paper: ${matchedPaperId}`);
       }
 
       // Try to find user by phone number as a fallback if not found in pending
       let matchedUserIdFinal = matchedUserId;
       if (!matchedUserIdFinal && phoneNumber) {
-        const allUsers: any[] = getUsers();
+        const allUsers: any[] = await getUsers();
         const normalizedPhone = phoneNumber.replace(/^\+?254/, '0');
         const matchedUserByPhone = allUsers.find((u: any) => {
           const uPhone = String(u.phone || '').replace(/^\+?254/, '0');
@@ -59,14 +58,14 @@ export async function POST(req: Request) {
         const isItem = String(paperId).startsWith('item_');
 
         if (isItem) {
-          updateMarketplaceItem(paperId, { status: 'sold' });
+          await updateMarketplaceItem(paperId, { status: 'sold' });
           console.log(`[M-Pesa] ✅ Marketplace item ${paperId} marked as sold. Buyer: ${matchedUserIdFinal}, Receipt: ${receiptNumber}`);
         } else {
           // Grant 3 months access for past papers
           const expiryDate = new Date();
           expiryDate.setMonth(expiryDate.getMonth() + 3); // 3 months access
 
-          addSubscription({
+          await addSubscription({
             id: `sub_${Date.now()}`,
             userId: matchedUserIdFinal,
             paperId: 'all_access',
@@ -78,7 +77,7 @@ export async function POST(req: Request) {
           });
           
           // Find user email for logging if possible
-          const fullUser = getUsers().find((u: any) => u.id === matchedUserIdFinal);
+          const fullUser = (await getUsers()).find((u: any) => u.id === matchedUserIdFinal);
           console.log(`[M-Pesa] ✅ Subscription created for user ${fullUser?.email || matchedUserIdFinal} and paper ${paperId}`);
         }
       } else {

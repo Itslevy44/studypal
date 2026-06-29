@@ -21,7 +21,7 @@ export async function GET(
       );
     }
 
-    const paper = getPaperById(id);
+    const paper = await getPaperById(id);
     if (!paper) {
       return NextResponse.json(
         { error: 'Paper not found' },
@@ -30,7 +30,7 @@ export async function GET(
     }
 
     // Check if user has access to this paper
-    const hasAccess = paper.cost === 0 || checkPaperAccess(tokenData.userId, id);
+    const hasAccess = paper.cost === 0 || await checkPaperAccess(tokenData.userId, id);
     
     if (!hasAccess) {
       return NextResponse.json(

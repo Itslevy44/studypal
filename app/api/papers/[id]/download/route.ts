@@ -21,7 +21,7 @@ export async function GET(
       );
     }
 
-    const paper = getPaperById(id);
+    const paper = await getPaperById(id);
     if (!paper) {
       return NextResponse.json(
         { error: 'Paper not found' },
@@ -30,7 +30,7 @@ export async function GET(
     }
 
     // Check if user has access to this paper (free OR purchased subscription)
-    const hasAccess = paper.cost === 0 || checkPaperAccess(tokenData.userId, id);
+    const hasAccess = paper.cost === 0 || await checkPaperAccess(tokenData.userId, id);
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -50,7 +50,7 @@ export async function GET(
         telegramFileId = fileInfo.fileId;
         // Cache/persist it so subsequent downloads are faster
         try {
-          updatePaper(id, { telegramFileId });
+          await updatePaper(id, { telegramFileId });
           console.log(`[Download] Successfully cached telegramFileId for paper ${id}`);
         } catch (e) {
           console.warn('[Download] Could not update paper with telegramFileId:', e);
@@ -82,7 +82,7 @@ export async function GET(
       // Increment download count
       const currentDownloads = paper.totalDownloads || 0;
       try {
-        updatePaper(id, { totalDownloads: currentDownloads + 1 });
+        await updatePaper(id, { totalDownloads: currentDownloads + 1 });
       } catch (e) {
         // Non-critical — don't fail the download
         console.warn('[Download] Could not update download count:', e);

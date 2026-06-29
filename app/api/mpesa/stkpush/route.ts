@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getMpesaToken, generatePassword, generateTimestamp } from '@/lib/mpesa';
 import { verifyRequestToken } from '@/lib/auth';
-import { getUsers, getUserById, writeJsonFile, readJsonFile, getPapers, getMarketplaceItems } from '@/lib/dataStore';
+import { getUsers, updateUser, getMarketplaceItems, addPendingPayment } from '@/lib/dataStore';
 
 export async function POST(req: Request) {
   try {
@@ -55,12 +55,7 @@ export async function POST(req: Request) {
     const authHeader = req.headers.get('authorization');
     const decoded = verifyRequestToken(authHeader);
     if (decoded?.userId) {
-      const users = getUsers();
-      const idx = users.findIndex((u: any) => u.id === decoded.userId);
-      if (idx !== -1) {
-        users[idx] = { ...users[idx], phone: formattedPhone };
-        writeJsonFile('users.json', users);
-      }
+      await updateUser(decoded.userId, { phone: formattedPhone });
     }
 
     const response = await fetch(url, {
@@ -88,20 +83,18 @@ export async function POST(req: Request) {
         let resolvedId = paymentRef;
 
         if (isItem) {
-          const items = getMarketplaceItems() || [];
+          const items = (await getMarketplaceItems()) || [];
           const matchedItem = items.find((i: any) => i.id === accountReference || i.id.startsWith(accountReference));
           if (matchedItem) resolvedId = matchedItem.id;
         }
 
-        const pendingPayments = readJsonFile('pending_payments.json') || [];
-        pendingPayments.push({
+        await addPendingPayment({
           checkoutRequestId: data.CheckoutRequestID,
           userId: decoded?.userId || null,
           paperId: resolvedId,
           amount: paymentAmount,
           createdAt: new Date().toISOString(),
         });
-        writeJsonFile('pending_payments.json', pendingPayments);
         console.log(`[M-Pesa] Pending payment stored: RequestID: ${data.CheckoutRequestID} | User: ${decoded?.userId} | ID: ${resolvedId}`);
       } catch (err) {
         console.error('[M-Pesa] Failed to record pending payment:', err);

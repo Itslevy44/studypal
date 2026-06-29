@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = getUserByEmail(email);
+    const existingUser = await getUserByEmail(email);
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    addUser(newUser);
+    await addUser(newUser);
 
     // Create JWT token
     const token = createToken(newUser.id, newUser.email, 'student');
