@@ -21,5 +21,16 @@
     "role": "student",
     "createdAt": "2026-06-10T14:58:33.973Z",
     "phone": "254718690760"
+  },
+  {
+    "id": "user_admin_levy",
+    "email": "levykirui093@gmail.com",
+    "passwordHash": "$2b$10$GlEMIJCu7NM9XTGs4xnMGOWyY6/RtCEvQD8.zwg.8ZIKM2B2DOd5a",
+    "fullName": "Admin Levy",
+    "university": "",
+    "campus": "",
+    "yearOfStudy": "",
+    "role": "admin",
+    "createdAt": "2026-06-29T06:21:30.640Z"
   }
 ]

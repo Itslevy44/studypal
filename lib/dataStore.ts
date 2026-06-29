@@ -186,6 +186,7 @@ export const setTelegramCollection = async <T>(
         telegramFileId: result.fileId,
         updatedAt: new Date().toISOString(),
       });
+      commitAndPushFile(path.join(dataDir, indexFilename), indexFilename);
     } else {
       console.error(`[Telegram Store ${kind}] Failed to upload to Telegram:`, result.error);
     }
