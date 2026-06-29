@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync } from 'child_process';
 import {
   downloadJsonDocumentFromTelegram,
   getLatestJsonDocumentFromTelegram,
@@ -76,46 +75,78 @@ export const writeJsonFile = (filename: string, data: any) => {
   }
 };
 
-// If GITHUB_PAT is provided and GITHUB_BACKED_STORE is enabled, commit and push
-const shouldUseGithub = !!process.env.GITHUB_PAT || process.env.GITHUB_BACKED_STORE === '1';
+// GitHub REST API — persist index pointer files directly to the repo.
+// This works in serverless environments (Vercel) where git CLI is unavailable.
+const GITHUB_PAT = process.env.GITHUB_PAT;
+const GITHUB_REPO = 'Itslevy44/studypal';
+const GITHUB_BRANCH = 'main';
 
-const commitAndPushFile = (filePath: string, filename: string) => {
-  if (!shouldUseGithub) return;
+const persistIndexToGithub = async (indexFilename: string, indexData: object): Promise<void> => {
+  if (!GITHUB_PAT) return;
+
+  const repoPath = `data/${indexFilename}`;
+  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${repoPath}`;
+  const headers = {
+    Authorization: `token ${GITHUB_PAT}`,
+    Accept: 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json',
+  };
 
   try {
-    const repoUrlBuffer = execSync('git config --get remote.origin.url', { encoding: 'utf8' });
-    let repoUrl = (repoUrlBuffer || '').trim();
-    if (!repoUrl) return;
-
-    const branchBuffer = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' });
-    const branch = (branchBuffer || 'main').trim();
-
-    const githubPat = process.env.GITHUB_PAT || '';
-
-    // Stage the file
-    execSync(`git add "${filePath}"`);
-
-    // Commit (ignore if no changes)
-    try {
-      execSync(`git commit -m "data: update ${filename}" --no-verify`, { stdio: 'ignore' });
-    } catch (commitErr) {
-      // nothing to commit
+    // Get current file SHA (required for updates)
+    let sha: string | undefined;
+    const getRes = await fetch(apiUrl, { headers });
+    if (getRes.ok) {
+      const existing = await getRes.json();
+      sha = existing.sha;
     }
 
-    // Push using authenticated URL if PAT available
-    if (githubPat) {
-      // construct authenticated URL safely
-      if (repoUrl.startsWith('https://')) {
-        const authUrl = repoUrl.replace('https://', `https://${githubPat}@`);
-        execSync(`git push "${authUrl}" HEAD:${branch}`);
-      } else {
-        execSync(`git push origin ${branch}`);
-      }
+    const content = Buffer.from(JSON.stringify(indexData, null, 2)).toString('base64');
+    const body: Record<string, unknown> = {
+      message: `data: update ${indexFilename}`,
+      content,
+      branch: GITHUB_BRANCH,
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      console.error(`[GitHub Persist] Failed to update ${indexFilename}:`, err.message);
     } else {
-      execSync(`git push origin ${branch}`);
+      console.log(`[GitHub Persist] Successfully updated ${indexFilename} in GitHub repo`);
     }
   } catch (err) {
-    console.error('Failed to commit/push data file to GitHub:', err instanceof Error ? err.message : err);
+    console.error(`[GitHub Persist] Exception updating ${indexFilename}:`, err instanceof Error ? err.message : err);
+  }
+};
+
+// Fetch index pointer file from GitHub when local cache is missing (e.g. fresh Vercel instance)
+const fetchIndexFromGithub = async (indexFilename: string): Promise<object | null> => {
+  if (!GITHUB_PAT) return null;
+
+  const repoPath = `data/${indexFilename}`;
+  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${repoPath}?ref=${GITHUB_BRANCH}`;
+
+  try {
+    const res = await fetch(apiUrl, {
+      headers: {
+        Authorization: `token ${GITHUB_PAT}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+    if (!res.ok) return null;
+    const file = await res.json();
+    if (!file.content) return null;
+    const decoded = Buffer.from(file.content, 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  } catch {
+    return null;
   }
 };
 
@@ -126,14 +157,26 @@ export const getTelegramCollection = async <T>(
   defaultValue: T
 ): Promise<T> => {
   const indexFilename = `${kind}_telegram.json`;
-  const index = readJsonFile(indexFilename) as any;
-  const telegramFileId = index?.telegramFileId;
+  let index = readJsonFile(indexFilename) as any;
+
+  // If no local index, try fetching from GitHub (covers fresh Vercel instances)
+  if (!index?.telegramFileId) {
+    console.log(`[Telegram Store ${kind}] No local index, fetching from GitHub...`);
+    const githubIndex = await fetchIndexFromGithub(indexFilename);
+    if (githubIndex) {
+      index = githubIndex;
+      // Cache it locally for subsequent requests in this function instance
+      try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
+    }
+  }
+
+  const telegramFileId = (index as any)?.telegramFileId;
 
   if (telegramFileId) {
     try {
       const data = await downloadJsonDocumentFromTelegram<T>(telegramFileId);
       if (data) {
-        writeJsonFile(filename, data);
+        try { writeJsonFile(filename, data); } catch { /* read-only fs */ }
         return data;
       }
     } catch (error) {
@@ -141,16 +184,17 @@ export const getTelegramCollection = async <T>(
     }
   }
 
-  // Try to get latest from telegram channel updates
+  // Try to get latest from telegram channel updates as final fallback
   try {
     const latest = await getLatestJsonDocumentFromTelegram<T>(kind);
     if (latest) {
-      writeJsonFile(indexFilename, {
+      const newIndex = {
         telegramMessageId: latest.messageId,
         telegramFileId: latest.fileId,
         updatedAt: latest.uploadedAt || new Date().toISOString(),
-      });
-      writeJsonFile(filename, latest.data);
+      };
+      try { writeJsonFile(indexFilename, newIndex); } catch { /* read-only fs */ }
+      try { writeJsonFile(filename, latest.data); } catch { /* read-only fs */ }
       return latest.data;
     }
   } catch (error) {
@@ -181,12 +225,16 @@ export const setTelegramCollection = async <T>(
     );
 
     if (result.success && result.fileId && result.messageId) {
-      writeJsonFile(indexFilename, {
+      const indexData = {
         telegramMessageId: result.messageId,
         telegramFileId: result.fileId,
         updatedAt: new Date().toISOString(),
-      });
-      commitAndPushFile(path.join(dataDir, indexFilename), indexFilename);
+      };
+      try { writeJsonFile(indexFilename, indexData); } catch { /* read-only fs */ }
+      // Persist index pointer to GitHub so it survives Vercel redeploys
+      persistIndexToGithub(indexFilename, indexData).catch((e) =>
+        console.error(`[GitHub Persist] Background push failed for ${indexFilename}:`, e)
+      );
     } else {
       console.error(`[Telegram Store ${kind}] Failed to upload to Telegram:`, result.error);
     }
