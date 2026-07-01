@@ -21,7 +21,7 @@ const LATEST_VERSION = '1.0.0';
 // Once the EAS build finishes, replace this with your actual APK URL.
 // e.g. '/download/studypal-v1.0.0.apk' once you self-host it,
 // or keep the EAS build link below — it works for direct downloads too.
-const APK_URL = 'https://expo.dev/accounts/kiprotichlevy/projects/studypal-app/builds/6815f51f-527d-464a-aee6-547d3a70eeb0';
+const APK_URL = 'https://expo.dev/accounts/kiprotichlevy/projects/studypal-app/builds/7064b7f1-9d46-4741-8304-118571173a57';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Home() {
