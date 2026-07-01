@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 const CURRENT_RELEASE = {
   latestVersion: '1.0.0',
   latestVersionCode: 1,
-  downloadUrl: 'https://github.com/Itslevy44/studypal/releases/download/v1.0.0/studypal-v1.0.0.apk',
+  downloadUrl: 'https://studypal-rust.vercel.app/api/download/apk',
   releaseNotes: '• Initial release\n• Browse and download past papers\n• M-Pesa payments\n• Marketplace\n• Offline downloads',
   mandatory: false,
 };

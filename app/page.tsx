@@ -21,7 +21,7 @@ const LATEST_VERSION = '1.0.0';
 // Once the EAS build finishes, replace this with your actual APK URL.
 // e.g. '/download/studypal-v1.0.0.apk' once you self-host it,
 // or keep the EAS build link below — it works for direct downloads too.
-const APK_URL = 'https://github.com/Itslevy44/studypal/releases/download/v1.0.0/studypal-v1.0.0.apk';
+const APK_URL = 'https://studypal-rust.vercel.app/api/download/apk';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Home() {
