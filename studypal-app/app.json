@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "StudyPal",
+    "slug": "studypal-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "studypal",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#020617"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/3e16ba97-2ec3-4aae-8e70-edd841d588b1"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.studypal.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4f46e5"
+      },
+      "package": "com.studypal.app",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://studypal-rust.vercel.app",
+      "appVersion": "1.0.0",
+      "appVersionCode": 1,
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "3e16ba97-2ec3-4aae-8e70-edd841d588b1"
+      }
+    },
+    "owner": "kiprotichlevy"
+  }
+}
