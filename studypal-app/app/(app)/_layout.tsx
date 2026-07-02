@@ -1,7 +1,9 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { COLORS } from '../../constants';
+import { useAuth } from '../../context/AuthContext';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
 import { UpdateBanner } from '../../components/UpdateBanner';
 
@@ -19,7 +21,19 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 }
 
 export default function AppLayout() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const { updateAvailable, updateInfo, dismissUpdate, openDownload } = useUpdateChecker();
+
+  // Redirect to login immediately when user logs out
+  React.useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/(auth)/login');
+    }
+  }, [user, loading]);
+
+  // Don't render tabs while redirecting
+  if (!loading && !user) return null;
 
   return (
     <>

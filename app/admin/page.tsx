@@ -210,7 +210,8 @@ export default function AdminDashboard() {
           {[
             { key: 'dashboard', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
             { key: 'universities', label: 'Universities', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-            { key: 'upload', label: 'Upload Papers', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
+            { key: 'papers', label: 'Papers Library', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+            { key: 'upload', label: 'Upload Paper', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
             { key: 'store', label: 'Manage Store', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
             { key: 'ads', label: 'Manage Ads', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
             { key: 'notices', label: 'Manage Notices', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
@@ -328,6 +329,10 @@ export default function AdminDashboard() {
 
           {tab === 'universities' && (
             <UniversitiesManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
+
+          {tab === 'papers' && (
+            <PapersManager adminToken={localStorage.getItem('adminToken') || ''} onNavigateUpload={() => setTab('upload')} />
           )}
 
           {tab === 'upload' && (
@@ -1676,3 +1681,295 @@ function NoticesManager({ adminToken }: { adminToken: string }) {
   );
 }
 
+
+// ── Papers Manager Component ──
+function PapersManager({ adminToken, onNavigateUpload }: { adminToken: string; onNavigateUpload: () => void }) {
+  const [papers, setPapers] = useState<any[]>([]);
+  const [universities, setUniversities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [message, setMessage] = useState({ text: '', isError: false });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingPaper, setEditingPaper] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCourse, setEditCourse] = useState('');
+  const [editExamPeriod, setEditExamPeriod] = useState('');
+  const [editYear, setEditYear] = useState('');
+  const [editCost, setEditCost] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [viewingPaper, setViewingPaper] = useState<any | null>(null);
+
+  const fetchData = async () => {
+    try {
+      const [papersRes, univsRes] = await Promise.all([
+        fetch('/api/papers', { headers: { Authorization: `Bearer ${adminToken}` } }),
+        fetch('/api/universities'),
+      ]);
+      const papersData = await papersRes.json();
+      const univsData = await univsRes.json();
+      setPapers(papersData.papers || []);
+      setUniversities(univsData.universities || []);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
+  const univName = (id: string) => universities.find((u) => u.id === id)?.name || id;
+
+  const handleDelete = async (paperId: string) => {
+    if (!confirm('Delete this paper permanently? This cannot be undone.')) return;
+    setDeletingId(paperId);
+    try {
+      const res = await fetch(`/api/papers?id=${paperId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed to delete paper', true); return; }
+      showMsg('✅ Paper deleted successfully.');
+      fetchData();
+    } catch (err: any) { showMsg(err.message || 'Error', true); }
+    finally { setDeletingId(null); }
+  };
+
+  const openEdit = (paper: any) => {
+    setEditingPaper(paper);
+    setEditTitle(paper.title || '');
+    setEditCourse(paper.course || '');
+    setEditExamPeriod(paper.examPeriod || '');
+    setEditYear(paper.yearOfStudy || '');
+    setEditCost(String(paper.cost ?? 0));
+    setEditDescription(paper.description || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPaper) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/papers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          id: editingPaper.id,
+          title: editTitle,
+          course: editCourse,
+          examPeriod: editExamPeriod,
+          yearOfStudy: editYear,
+          cost: Number(editCost),
+          description: editDescription,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed to update paper', true); return; }
+      showMsg('✅ Paper updated successfully!');
+      setEditingPaper(null);
+      fetchData();
+    } catch (err: any) { showMsg(err.message || 'Error', true); }
+    finally { setSaving(false); }
+  };
+
+  const filtered = papers.filter((p) =>
+    !search ||
+    (p.title || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.course || '').toLowerCase().includes(search.toLowerCase()) ||
+    univName(p.university).toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900">Papers Library</h2>
+          <p className="text-slate-500 mt-1">{papers.length} papers total</p>
+        </div>
+        <button
+          onClick={onNavigateUpload}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 shadow-lg shadow-indigo-500/25 hover:scale-105 transition-all"
+        >
+          + Upload New Paper
+        </button>
+      </div>
+
+      {message.text && (
+        <div className={`p-4 rounded-2xl border text-sm font-medium ${message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title, course, or university…"
+          className={INPUT_CLASS}
+        />
+      </div>
+
+      {/* Edit Modal */}
+      {editingPaper && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-black text-slate-900 mb-6">Edit Paper</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Title</label>
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={INPUT_CLASS} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Course Code</label>
+                  <input value={editCourse} onChange={(e) => setEditCourse(e.target.value)} className={INPUT_CLASS} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Exam Period</label>
+                  <input value={editExamPeriod} onChange={(e) => setEditExamPeriod(e.target.value)} className={INPUT_CLASS} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Year of Study</label>
+                  <select value={editYear} onChange={(e) => setEditYear(e.target.value)} className={SELECT_CLASS}>
+                    {['Year 1','Year 2','Year 3','Year 4','Year 5'].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Cost (KES) — 0 = Free</label>
+                  <input type="number" value={editCost} onChange={(e) => setEditCost(e.target.value)} min="0" className={INPUT_CLASS} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Description</label>
+                <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3}
+                  className="w-full bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleSaveEdit} disabled={saving}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 disabled:opacity-50 transition-all hover:scale-[1.01]">
+                  {saving ? 'Saving…' : '✓ Save Changes'}
+                </button>
+                <button onClick={() => setEditingPaper(null)} disabled={saving}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Modal */}
+      {viewingPaper && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-6">
+              <h3 className="text-xl font-black text-slate-900 pr-4">{viewingPaper.title || viewingPaper.course}</h3>
+              <button onClick={() => setViewingPaper(null)} className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm transition-all">✕</button>
+            </div>
+            <div className="space-y-3 text-sm">
+              {[
+                { label: 'Course Code', value: viewingPaper.course },
+                { label: 'University', value: univName(viewingPaper.university) },
+                { label: 'Campus', value: viewingPaper.campus },
+                { label: 'Exam Period', value: viewingPaper.examPeriod },
+                { label: 'Year of Study', value: viewingPaper.yearOfStudy },
+                { label: 'Cost', value: viewingPaper.cost === 0 ? 'Free' : `KES ${viewingPaper.cost}` },
+                { label: 'Downloads', value: viewingPaper.totalDownloads ?? 0 },
+                { label: 'File Type', value: (viewingPaper.fileType || 'pdf').toUpperCase() },
+                { label: 'File Size', value: viewingPaper.fileSize || '—' },
+                { label: 'Description', value: viewingPaper.description || '—' },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between border-b border-slate-100 pb-2">
+                  <span className="font-semibold text-slate-500">{row.label}</span>
+                  <span className="text-slate-900 font-medium text-right max-w-[60%]">{String(row.value)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setViewingPaper(null); openEdit(viewingPaper); }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-all">
+                ✏️ Edit
+              </button>
+              <button onClick={() => setViewingPaper(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Papers Table */}
+      {loading ? (
+        <div className="space-y-3">
+          {[1,2,3,4,5].map(i => <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse h-20" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          {search ? 'No papers match your search.' : 'No papers uploaded yet.'}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider">Course / Title</th>
+                  <th className="text-left px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider hidden md:table-cell">University</th>
+                  <th className="text-left px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider hidden lg:table-cell">Period</th>
+                  <th className="text-left px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider">Price</th>
+                  <th className="text-left px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">Downloads</th>
+                  <th className="text-right px-5 py-3.5 font-bold text-slate-600 text-xs uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((paper) => (
+                  <tr key={paper.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-4">
+                      <p className="font-bold text-slate-900 text-sm">{paper.course}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 max-w-[200px] truncate">{paper.title || '—'}</p>
+                    </td>
+                    <td className="px-5 py-4 hidden md:table-cell text-slate-600 text-xs">{univName(paper.university)}</td>
+                    <td className="px-5 py-4 hidden lg:table-cell text-slate-600 text-xs">{paper.examPeriod || '—'}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${paper.cost === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        {paper.cost === 0 ? 'Free' : `KES ${paper.cost}`}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 hidden sm:table-cell text-slate-600 text-xs">{paper.totalDownloads ?? 0}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => setViewingPaper(paper)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
+                          title="View">👁 View</button>
+                        <button onClick={() => openEdit(paper)} disabled={deletingId !== null}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all disabled:opacity-50"
+                          title="Edit">✏️ Edit</button>
+                        <button onClick={() => handleDelete(paper.id)} disabled={deletingId !== null}
+                          className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all disabled:opacity-50"
+                          title="Delete">
+                          {deletingId === paper.id ? '…' : '🗑️'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 font-medium">
+            Showing {filtered.length} of {papers.length} papers
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
