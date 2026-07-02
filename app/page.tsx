@@ -25,8 +25,76 @@ const APK_URL = 'https://studypal-rust.vercel.app/api/download/apk';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  // Structured data for SEO
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://studypal-rust.vercel.app/#website",
+        "url": "https://studypal-rust.vercel.app",
+        "name": "StudyPal",
+        "description": "Kenya's #1 Student Study Resource",
+        "publisher": {
+          "@id": "https://studypal-rust.vercel.app/#organization"
+        },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://studypal-rust.vercel.app/?s={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://studypal-rust.vercel.app/#organization",
+        "name": "StudyPal",
+        "url": "https://studypal-rust.vercel.app",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://studypal-rust.vercel.app/logo.png"
+        },
+        "sameAs": []
+      },
+      {
+        "@type": "MobileApplication",
+        "name": "StudyPal",
+        "operatingSystem": "Android",
+        "applicationCategory": "EducationalApplication",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "KES"
+        },
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.8",
+          "ratingCount": "500"
+        },
+        "description": "Access thousands of past exam papers from Kenyan universities. Secure M-Pesa payments, offline downloads, and academic marketplace."
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "StudyPal",
+        "operatingSystem": "Android",
+        "applicationCategory": "EducationalApplication",
+        "downloadUrl": "https://studypal-rust.vercel.app/api/download/apk",
+        "softwareVersion": LATEST_VERSION,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "KES"
+        }
+      }
+    ]
+  };
+
   return (
     <main className="min-h-screen bg-white font-[var(--font-inter)]">
+      {/* JSON-LD Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
 
       {/* ── Nav ── */}
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-sm">

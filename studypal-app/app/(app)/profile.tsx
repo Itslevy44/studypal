@@ -8,12 +8,32 @@ import { api } from '../../lib/api';
 import { Input } from '../../components/ui/Input';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { Card } from '../../components/ui/Card';
+import { UpdateModal } from '../../components/UpdateModal';
 import { COLORS, RADIUS, SHADOW, APP_VERSION, APP_VERSION_CODE } from '../../constants';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
-  const { checkForUpdate, checking, updateAvailable } = useUpdateChecker();
+  const { updateAvailable, updateInfo, checking, checkForUpdate, dismissUpdate, openDownload } = useUpdateChecker();
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [checkedOnce, setCheckedOnce] = useState(false);
+
+  const handleCheckForUpdates = async () => {
+    setCheckedOnce(false);
+    await checkForUpdate();
+    setCheckedOnce(true);
+  };
+
+  // After a manual check completes, react to the result
+  useEffect(() => {
+    if (!checkedOnce) return;
+    if (updateAvailable && updateInfo) {
+      setShowUpdateModal(true);
+    } else {
+      Alert.alert('Up to date ✓', `You are on the latest version (${APP_VERSION}).`);
+    }
+    setCheckedOnce(false);
+  }, [checkedOnce, updateAvailable, updateInfo]);
 
   const [universities, setUniversities] = useState<any[]>([]);
   const [fullName, setFullName] = useState(user?.fullName ?? '');
@@ -132,11 +152,20 @@ export default function ProfileScreen() {
           </View>
           <GradientButton
             label={checking ? 'Checking…' : 'Check for Updates'}
-            onPress={checkForUpdate}
+            onPress={handleCheckForUpdates}
             loading={checking}
             variant="ghost"
             style={{ marginTop: 8 }}
           />
+          {/* Show update button immediately if update is already known */}
+          {updateAvailable && !checking && (
+            <TouchableOpacity
+              style={styles.updateNowBtn}
+              onPress={() => setShowUpdateModal(true)}
+            >
+              <Text style={styles.updateNowText}>🚀 Update Now — v{updateInfo?.latestVersion}</Text>
+            </TouchableOpacity>
+          )}
         </Card>
 
         {/* Sign out */}
@@ -147,6 +176,20 @@ export default function ProfileScreen() {
           style={styles.logoutBtn}
         />
       </ScrollView>
+
+      {/* Update modal — shown when update is available and user taps Check/Update Now */}
+      {showUpdateModal && updateInfo && (
+        <UpdateModal
+          info={updateInfo}
+          onUpdate={() => {
+            openDownload();
+          }}
+          onDismiss={async () => {
+            await dismissUpdate();
+            setShowUpdateModal(false);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -184,4 +227,16 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '600' },
   infoValue: { fontSize: 13, color: COLORS.text.primary, fontWeight: '700' },
   logoutBtn: { marginTop: 8 },
+  updateNowBtn: {
+    marginTop: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.xl,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  updateNowText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
 });

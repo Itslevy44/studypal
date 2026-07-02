@@ -4,13 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '../context/AuthContext';
 import { UpdateModal } from '../components/UpdateModal';
-import { useUpdateChecker } from '../hooks/useUpdateChecker';
+import { useUpdateChecker } from '../lib/useUpdateChecker';
 import { COLORS } from '../constants';
 
 SplashScreen.preventAutoHideAsync();
 
 function AppWithUpdateChecker() {
-  const { updateInfo, dismiss, openDownload } = useUpdateChecker();
+  const { updateInfo, dismissUpdate, openDownload } = useUpdateChecker();
 
   return (
     <>
@@ -24,7 +24,7 @@ function AppWithUpdateChecker() {
         <UpdateModal
           info={updateInfo}
           onUpdate={openDownload}
-          onDismiss={dismiss}
+          onDismiss={dismissUpdate}
         />
       )}
     </>
