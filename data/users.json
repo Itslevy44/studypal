@@ -1,36 +1,47 @@
-[
-  {
-    "id": "user_1",
-    "email": "student@example.com",
-    "passwordHash": "$2b$10$example_hash_here",
-    "fullName": "John Doe",
-    "university": "univ_1",
-    "campus": "campus_1",
-    "yearOfStudy": "Year 1",
-    "role": "student",
-    "createdAt": "2024-01-10T08:00:00Z"
-  },
-  {
-    "id": "user_b16c114efb2b07d0",
-    "email": "kiprotichlevy0@gmail.com",
-    "passwordHash": "$2b$10$i.5TOlUQZ/II/6TTikkhC.0.gutWVghV7.TEi55PItENjSLUKES3i",
-    "fullName": "levy kiprotich",
-    "university": "univ_1",
-    "campus": "campus_1",
-    "yearOfStudy": "Year 1",
-    "role": "student",
-    "createdAt": "2026-06-10T14:58:33.973Z",
-    "phone": "254718690760"
-  },
-  {
-    "id": "user_admin_levy",
-    "email": "levykirui093@gmail.com",
-    "passwordHash": "$2b$10$GlEMIJCu7NM9XTGs4xnMGOWyY6/RtCEvQD8.zwg.8ZIKM2B2DOd5a",
-    "fullName": "Admin Levy",
-    "university": "",
-    "campus": "",
-    "yearOfStudy": "",
-    "role": "admin",
-    "createdAt": "2026-06-29T06:21:30.640Z"
-  }
+﻿[
+    {
+        "id":  "user_b16c114efb2b07d0",
+        "email":  "kiprotichlevy0@gmail.com",
+        "passwordHash":  "$2b$10$i.5TOlUQZ/II/6TTikkhC.0.gutWVghV7.TEi55PItENjSLUKES3i",
+        "fullName":  "levy kiprotich",
+        "university":  "univ_1",
+        "campus":  "campus_1",
+        "yearOfStudy":  "Year 1",
+        "role":  "student",
+        "createdAt":  "2026-06-10T14:58:33.973Z",
+        "phone":  "254718690760"
+    },
+    {
+        "id":  "user_admin_levy",
+        "email":  "levykirui093@gmail.com",
+        "passwordHash":  "$2b$10$GlEMIJCu7NM9XTGs4xnMGOWyY6/RtCEvQD8.zwg.8ZIKM2B2DOd5a",
+        "fullName":  "Admin Levy",
+        "university":  "",
+        "campus":  "",
+        "yearOfStudy":  "",
+        "role":  "admin",
+        "createdAt":  "2026-06-29T06:21:30.640Z"
+    },
+    {
+        "id":  "user_e58d0815c658eeab",
+        "email":  "levyneymar66@gmail.com",
+        "passwordHash":  "$2b$10$uNyIgYJCqOdNarnAv0i8T.FS7CO.6cENDGbrziDD0tR4Zk4Zmg9Cq",
+        "fullName":  "test",
+        "university":  "univ_3",
+        "campus":  "campus_5",
+        "yearOfStudy":  "Year 5",
+        "role":  "student",
+        "createdAt":  "2026-06-29T07:07:33.652Z"
+    },
+    {
+        "id":  "user_e5dd29bc7216111c",
+        "email":  "sylvianyongesa018@gmail.com",
+        "passwordHash":  "$2b$10$6y0/OYubcVE5.nabn.WQqePuvj75fo2rH7seMwAtok/Cwfq55MQpG",
+        "fullName":  "Sylvia Nyongesa ",
+        "university":  "univ_1",
+        "campus":  "campus_1",
+        "yearOfStudy":  "Year 2",
+        "role":  "student",
+        "createdAt":  "2026-06-29T08:02:05.952Z"
+    }
 ]
