@@ -764,19 +764,37 @@ function AdminUploadPage({ onUploadSuccess }: { onUploadSuccess: () => void }) {
           </select>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className={labelClass}>Cost (KES)</label>
-            <input type="number" value={cost} onChange={(e) => setCost(e.target.value)}
-              placeholder="0 for free" min="0"
-              className={INPUT_CLASS} />
+        <div>
+          <label className={labelClass}>Access Type *</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => { setCost('0'); setDuration('Lifetime'); }}
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                cost === '0'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              <span className="text-lg">🆓</span> Free
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCost('100'); setDuration('1 Semester'); }}
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                cost !== '0'
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              <span className="text-lg">🔒</span> Subscription
+            </button>
           </div>
-          <div>
-            <label className={labelClass}>Access Duration</label>
-            <select value={duration} onChange={(e) => setDuration(e.target.value)} className={SELECT_CLASS}>
-              {['24 Hours','7 Days','30 Days','1 Semester','Lifetime'].map((d) => (<option key={d} value={d}>{d}</option>))}
-            </select>
-          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            {cost === '0'
+              ? 'Anyone can download this paper for free.'
+              : 'Only users with an active KES 100 / 3-month subscription can access this paper.'}
+          </p>
         </div>
 
         <div>
@@ -1842,8 +1860,22 @@ function PapersManager({ adminToken, onNavigateUpload }: { adminToken: string; o
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Cost (KES) — 0 = Free</label>
-                  <input type="number" value={editCost} onChange={(e) => setEditCost(e.target.value)} min="0" className={INPUT_CLASS} />
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Access Type</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button"
+                      onClick={() => setEditCost('0')}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${editCost === '0' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                      🆓 Free
+                    </button>
+                    <button type="button"
+                      onClick={() => setEditCost('100')}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${editCost !== '0' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                      🔒 Subscription
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">
+                    {editCost === '0' ? 'Free for everyone.' : 'Requires active subscription (KES 100 / 3 months).'}
+                  </p>
                 </div>
               </div>
               <div>
