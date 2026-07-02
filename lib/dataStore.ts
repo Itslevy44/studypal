@@ -1,293 +1,161 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+/**
+ * dataStore.ts
+ *
+ * GitHub is the single source of truth for all JSON collections.
+ * Every read fetches the latest file directly from GitHub.
+ * Every write commits the updated file back to GitHub immediately.
+ *
+ * Telegram is used ONLY for binary file storage (PDFs, images).
+ * The stale-Telegram-index problem is eliminated entirely.
+ */
+
 import {
-  downloadJsonDocumentFromTelegram,
-  getLatestJsonDocumentFromTelegram,
-  sendJsonDocumentToTelegram
+  deleteFromTelegram,
 } from './telegram';
 
-const packagedDataDir = path.join(process.cwd(), 'data');
-
-// Determine a writable data directory. In serverless environments the project
-// directory (e.g. /var/task) may be read-only. Use a runtime temp dir if so.
-const runtimeDataDir = process.env.RUNTIME_DATA_DIR || path.join(os.tmpdir(), 'study-pal-data');
-
-let dataDir = packagedDataDir;
-
-const ensureDir = (dir: string) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
-
-// If packaged data dir is writable use it. Otherwise fall back to runtimeDataDir
-try {
-  // Try to write a small temp file to verify writability
-  ensureDir(packagedDataDir);
-  const testPath = path.join(packagedDataDir, '.write_test');
-  fs.writeFileSync(testPath, 'ok');
-  fs.unlinkSync(testPath);
-  dataDir = packagedDataDir;
-} catch (err) {
-  // Packaged dir not writable — copy files to runtime dir on first run
-  dataDir = runtimeDataDir;
-  ensureDir(dataDir);
-
-  try {
-    const files = fs.readdirSync(packagedDataDir);
-    for (const f of files) {
-      const src = path.join(packagedDataDir, f);
-      const dest = path.join(dataDir, f);
-      if (!fs.existsSync(dest)) {
-        try {
-          fs.copyFileSync(src, dest);
-        } catch (copyErr) {
-          // ignore copy errors for missing files
-        }
-      }
-    }
-  } catch (readErr) {
-    // packaged data dir may not exist or be unreadable — ensure runtime dir exists
-    ensureDir(dataDir);
-  }
-}
-
-// Generic file-based data store
-export const readJsonFile = (filename: string) => {
-  const filePath = path.join(dataDir, filename);
-  try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.warn(`File ${filename} not found or invalid JSON`);
-    return [];
-  }
-};
-
-export const writeJsonFile = (filename: string, data: any) => {
-  const filePath = path.join(dataDir, filename);
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error(`Failed to write ${filePath}:`, err);
-    throw err;
-  }
-};
-
-// GitHub REST API — persist index pointer files directly to the repo.
-// This works in serverless environments (Vercel) where git CLI is unavailable.
 const GITHUB_PAT = process.env.GITHUB_PAT;
 const GITHUB_REPO = 'Itslevy44/studypal';
 const GITHUB_BRANCH = 'main';
+const GITHUB_API = 'https://api.github.com';
 
-const persistIndexToGithub = async (indexFilename: string, indexData: object): Promise<void> => {
-  if (!GITHUB_PAT) return;
+// ── In-memory write-through cache (per serverless instance) ──────────────────
+// Prevents multiple reads in the same request, but GitHub is always the source
+// on a fresh instance.
+const memCache: Record<string, { data: any; sha: string }> = {};
 
-  const repoPath = `data/${indexFilename}`;
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${repoPath}`;
-  const headers = {
-    Authorization: `token ${GITHUB_PAT}`,
-    Accept: 'application/vnd.github.v3+json',
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    // Get current file SHA (required for updates)
-    let sha: string | undefined;
-    const getRes = await fetch(apiUrl, { headers });
-    if (getRes.ok) {
-      const existing = await getRes.json();
-      sha = existing.sha;
-    }
-
-    const content = Buffer.from(JSON.stringify(indexData, null, 2)).toString('base64');
-    const body: Record<string, unknown> = {
-      message: `data: update ${indexFilename}`,
-      content,
-      branch: GITHUB_BRANCH,
-    };
-    if (sha) body.sha = sha;
-
-    const putRes = await fetch(apiUrl, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!putRes.ok) {
-      const err = await putRes.json();
-      console.error(`[GitHub Persist] Failed to update ${indexFilename}:`, err.message);
-    } else {
-      console.log(`[GitHub Persist] Successfully updated ${indexFilename} in GitHub repo`);
-    }
-  } catch (err) {
-    console.error(`[GitHub Persist] Exception updating ${indexFilename}:`, err instanceof Error ? err.message : err);
-  }
-};
-
-// Fetch index pointer file from GitHub when local cache is missing (e.g. fresh Vercel instance)
-const fetchIndexFromGithub = async (indexFilename: string): Promise<object | null> => {
-  if (!GITHUB_PAT) return null;
-
-  const repoPath = `data/${indexFilename}`;
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${repoPath}?ref=${GITHUB_BRANCH}`;
-
-  try {
-    const res = await fetch(apiUrl, {
-      headers: {
-        Authorization: `token ${GITHUB_PAT}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    });
-    if (!res.ok) return null;
-    const file = await res.json();
-    if (!file.content) return null;
-    const decoded = Buffer.from(file.content, 'base64').toString('utf8');
-    return JSON.parse(decoded);
-  } catch {
+async function githubGet(filePath: string): Promise<{ data: any; sha: string } | null> {
+  if (!GITHUB_PAT) {
+    console.error('[dataStore] GITHUB_PAT is not set');
     return null;
   }
-};
 
-// Process-level cache to track if we've synced the index from GitHub on startup
-const startupSyncDone: Record<string, boolean> = {};
+  const url = `${GITHUB_API}/repos/${GITHUB_REPO}/contents/${filePath}?ref=${GITHUB_BRANCH}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `token ${GITHUB_PAT}`,
+      Accept: 'application/vnd.github.v3+json',
+    },
+    // Always bypass any CDN cache
+    cache: 'no-store',
+  });
 
-// Generic Telegram-backed store collection helper functions
-export const getTelegramCollection = async <T>(
-  filename: string,
-  kind: string,
-  defaultValue: T
-): Promise<T> => {
-  const indexFilename = `${kind}_telegram.json`;
-  let index = readJsonFile(indexFilename) as any;
-
-  // On process/container startup, ALWAYS fetch the latest index pointer from GitHub
-  // to ensure we don't use a stale packaged index file.
-  if (!startupSyncDone[kind]) {
-    console.log(`[Telegram Store ${kind}] Startup: fetching latest index from GitHub...`);
-    const githubIndex = await fetchIndexFromGithub(indexFilename);
-    if (githubIndex) {
-      index = githubIndex;
-      try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
-    }
-    startupSyncDone[kind] = true;
-  } else if (!index?.telegramFileId) {
-    console.log(`[Telegram Store ${kind}] No local index, fetching from GitHub...`);
-    const githubIndex = await fetchIndexFromGithub(indexFilename);
-    if (githubIndex) {
-      index = githubIndex;
-      try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
-    }
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`GitHub GET ${filePath} failed: ${res.status}`);
   }
 
-  const telegramFileId = (index as any)?.telegramFileId;
+  const file = await res.json();
+  const content = Buffer.from(file.content, 'base64').toString('utf8');
+  return { data: JSON.parse(content), sha: file.sha };
+}
 
-  if (telegramFileId) {
-    try {
-      const data = await downloadJsonDocumentFromTelegram<T>(telegramFileId);
-      if (data) {
-        try { writeJsonFile(filename, data); } catch { /* read-only fs */ }
-        return data;
-      }
-    } catch (error) {
-      console.warn(`[Telegram Store ${kind}] Falling back to cached local file:`, error);
-    }
+async function githubPut(filePath: string, data: any, currentSha?: string): Promise<string> {
+  if (!GITHUB_PAT) throw new Error('[dataStore] GITHUB_PAT is not set');
+
+  // Get current SHA if not provided
+  let sha = currentSha;
+  if (!sha) {
+    const existing = await githubGet(filePath);
+    sha = existing?.sha;
   }
 
-  // Try to get latest from telegram channel updates as final fallback
-  try {
-    const latest = await getLatestJsonDocumentFromTelegram<T>(kind);
-    if (latest) {
-      const newIndex = {
-        telegramMessageId: latest.messageId,
-        telegramFileId: latest.fileId,
-        updatedAt: latest.uploadedAt || new Date().toISOString(),
-      };
-      try { writeJsonFile(indexFilename, newIndex); } catch { /* read-only fs */ }
-      try { writeJsonFile(filename, latest.data); } catch { /* read-only fs */ }
-      return latest.data;
-    }
-  } catch (error) {
-    console.warn(`[Telegram Store ${kind}] Failed to fetch from telegram updates:`, error);
+  const content = Buffer.from(JSON.stringify(data, null, 2) + '\n').toString('base64');
+  const body: any = {
+    message: `data: update ${filePath.split('/').pop()}`,
+    content,
+    branch: GITHUB_BRANCH,
+  };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/contents/${filePath}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${GITHUB_PAT}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`GitHub PUT ${filePath} failed: ${res.status} ${err.message || ''}`);
   }
 
-  // Fallback to local cache
-  const cached = readJsonFile(filename);
-  return (Array.isArray(cached) || typeof cached === 'object') && cached ? (cached as T) : defaultValue;
-};
+  const result = await res.json();
+  return result.content.sha;
+}
 
-export const setTelegramCollection = async <T>(
-  filename: string,
-  kind: string,
-  data: T
-): Promise<T> => {
-  const indexFilename = `${kind}_telegram.json`;
-  const telegramFilename = `studypal_${kind}.json`;
+// ── Generic collection helpers ────────────────────────────────────────────────
 
-  // Write locally first
-  writeJsonFile(filename, data);
+async function getCollection<T = any[]>(filename: string): Promise<T> {
+  // Check memory cache first (valid within same serverless invocation)
+  if (memCache[filename]) return memCache[filename].data as T;
 
-  try {
-    const result = await sendJsonDocumentToTelegram(
-      telegramFilename,
-      data,
-      { kind }
-    );
+  const result = await githubGet(`data/${filename}`);
+  if (!result) return [] as unknown as T;
 
-    if (result.success && result.fileId && result.messageId) {
-      const indexData = {
-        telegramMessageId: result.messageId,
-        telegramFileId: result.fileId,
-        updatedAt: new Date().toISOString(),
-      };
-      try { writeJsonFile(indexFilename, indexData); } catch { /* read-only fs */ }
-      // Await GitHub persist so the index is durable before returning
-      await persistIndexToGithub(indexFilename, indexData);
-    } else {
-      console.error(`[Telegram Store ${kind}] Failed to upload to Telegram:`, result.error);
-    }
-  } catch (error) {
-    console.error(`[Telegram Store ${kind}] Exception uploading to Telegram:`, error);
-  }
+  memCache[filename] = result;
+  return result.data as T;
+}
 
+async function setCollection<T = any[]>(filename: string, data: T): Promise<T> {
+  const currentSha = memCache[filename]?.sha;
+  const newSha = await githubPut(`data/${filename}`, data, currentSha);
+  memCache[filename] = { data, sha: newSha };
   return data;
+}
+
+// ── Public helpers (used by api routes) ──────────────────────────────────────
+
+export const readJsonFile = (filename: string) => {
+  // Legacy sync helper — returns empty array; actual data comes from GitHub async
+  return [];
 };
 
-// Universities operations
-export const getUniversities = async () => getTelegramCollection<any[]>('universities.json', 'universities', []);
+export const writeJsonFile = (_filename: string, _data: any) => {
+  // No-op — all writes go through setCollection → GitHub
+};
+
+// ── Universities ─────────────────────────────────────────────────────────────
+
+export const getUniversities = () => getCollection('universities.json');
 
 export const getUniversityById = async (id: string) => {
-  const universities = await getUniversities();
-  return universities.find((u: any) => u.id === id);
+  const list = await getUniversities();
+  return list.find((u: any) => u.id === id) ?? null;
 };
 
 export const addUniversity = async (university: any) => {
-  const universities = await getUniversities();
-  universities.push(university);
-  await setTelegramCollection('universities.json', 'universities', universities);
+  const list = await getUniversities();
+  list.push(university);
+  await setCollection('universities.json', list);
   return university;
 };
 
 export const updateUniversity = async (id: string, updates: any) => {
-  const universities = await getUniversities();
-  const index = universities.findIndex((u: any) => u.id === id);
-  if (index !== -1) {
-    universities[index] = { ...universities[index], ...updates };
-    await setTelegramCollection('universities.json', 'universities', universities);
-    return universities[index];
-  }
-  return null;
+  const list = await getUniversities();
+  const idx = list.findIndex((u: any) => u.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('universities.json', list);
+  return list[idx];
 };
 
-// Papers operations
-export const getPapers = async () => getTelegramCollection<any[]>('papers.json', 'papers', []);
+export const deleteUniversity = async (id: string) => {
+  const list = await getUniversities();
+  await setCollection('universities.json', list.filter((u: any) => u.id !== id));
+  return true;
+};
+
+// ── Papers ────────────────────────────────────────────────────────────────────
+
+export const getPapers = () => getCollection('papers.json');
 
 export const getPapersByUniversity = async (univId: string) => {
-  const papers = await getPapers();
-  const university = await getUniversityById(univId);
+  const [papers, universities] = await Promise.all([getPapers(), getUniversities()]);
+  const university = universities.find((u: any) => u.id === univId);
   const universityName = university?.name;
-
   return papers.filter((p: any) =>
     p.university === univId ||
     p.university === universityName ||
@@ -297,197 +165,198 @@ export const getPapersByUniversity = async (univId: string) => {
 };
 
 export const getPaperById = async (id: string) => {
-  const papers = await getPapers();
-  return papers.find((p: any) => p.id === id);
+  const list = await getPapers();
+  return list.find((p: any) => p.id === id) ?? null;
 };
 
 export const addPaper = async (paper: any) => {
-  const papers = await getPapers();
-  papers.push(paper);
-  await setTelegramCollection('papers.json', 'papers', papers);
+  const list = await getPapers();
+  list.push(paper);
+  await setCollection('papers.json', list);
   return paper;
 };
 
 export const updatePaper = async (id: string, updates: any) => {
-  const papers = await getPapers();
-  const index = papers.findIndex((p: any) => p.id === id);
-  if (index !== -1) {
-    papers[index] = { ...papers[index], ...updates };
-    await setTelegramCollection('papers.json', 'papers', papers);
-    return papers[index];
-  }
-  return null;
+  const list = await getPapers();
+  const idx = list.findIndex((p: any) => p.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('papers.json', list);
+  return list[idx];
 };
 
 export const deletePaper = async (id: string) => {
-  const papers = await getPapers();
-  const filtered = papers.filter((p: any) => p.id !== id);
-  await setTelegramCollection('papers.json', 'papers', filtered);
+  const list = await getPapers();
+  await setCollection('papers.json', list.filter((p: any) => p.id !== id));
   return true;
 };
 
-// Users operations
-export const getUsers = async () => getTelegramCollection<any[]>('users.json', 'users', []);
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+export const getUsers = () => getCollection('users.json');
 
 export const getUserByEmail = async (email: string) => {
-  const users = await getUsers();
-  return users.find((u: any) => u.email === email.toLowerCase());
+  const list = await getUsers();
+  return list.find((u: any) => u.email === email.toLowerCase()) ?? null;
 };
 
 export const getUserById = async (id: string) => {
-  const users = await getUsers();
-  return users.find((u: any) => u.id === id);
+  const list = await getUsers();
+  return list.find((u: any) => u.id === id) ?? null;
 };
 
 export const addUser = async (user: any) => {
-  const users = await getUsers();
-  users.push(user);
-  await setTelegramCollection('users.json', 'users', users);
+  const list = await getUsers();
+  list.push(user);
+  await setCollection('users.json', list);
   return user;
 };
 
 export const updateUser = async (id: string, updates: any) => {
-  const users = await getUsers();
-  const index = users.findIndex((u: any) => u.id === id);
-  if (index !== -1) {
-    users[index] = { ...users[index], ...updates };
-    await setTelegramCollection('users.json', 'users', users);
-    return users[index];
-  }
-  return null;
+  const list = await getUsers();
+  const idx = list.findIndex((u: any) => u.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('users.json', list);
+  return list[idx];
 };
 
-// Subscriptions operations
-export const getSubscriptions = async () => getTelegramCollection<any[]>('subscriptions.json', 'subscriptions', []);
+// ── Subscriptions ─────────────────────────────────────────────────────────────
 
-export const getSubscriptionsByUser = async (userId: string) => {
-  const subs = await getSubscriptions();
-  return subs.filter((s: any) => s.userId === userId);
-};
+export const getSubscriptions = () => getCollection('subscriptions.json');
 
-export const checkPaperAccess = async (userId: string, paperId?: string) => {
+export const checkPaperAccess = async (userId: string, _paperId?: string) => {
   const subs = await getSubscriptions();
-  const sub = subs.find((s: any) => 
-    s.userId === userId && 
+  return subs.some((s: any) =>
+    s.userId === userId &&
     s.status === 'active' &&
     new Date(s.expiryDate) > new Date()
   );
-  return !!sub;
 };
 
 export const addSubscription = async (subscription: any) => {
-  const subs = await getSubscriptions();
-  subs.push(subscription);
-  await setTelegramCollection('subscriptions.json', 'subscriptions', subs);
+  const list = await getSubscriptions();
+  list.push(subscription);
+  await setCollection('subscriptions.json', list);
   return subscription;
 };
 
-// Marketplace Items operations
-export const getMarketplaceItems = async () => getTelegramCollection<any[]>('marketplace_items.json', 'marketplace_items', []);
+// ── Marketplace Items ─────────────────────────────────────────────────────────
+
+export const getMarketplaceItems = () => getCollection('marketplace_items.json');
 
 export const getMarketplaceItemById = async (id: string) => {
-  const items = await getMarketplaceItems();
-  return items.find((i: any) => i.id === id);
+  const list = await getMarketplaceItems();
+  return list.find((i: any) => i.id === id) ?? null;
 };
 
 export const addMarketplaceItem = async (item: any) => {
-  const items = (await getMarketplaceItems()) || [];
-  items.push(item);
-  await setTelegramCollection('marketplace_items.json', 'marketplace_items', items);
+  const list = await getMarketplaceItems();
+  list.push(item);
+  await setCollection('marketplace_items.json', list);
   return item;
 };
 
 export const updateMarketplaceItem = async (id: string, updates: any) => {
-  const items = await getMarketplaceItems();
-  const index = items.findIndex((i: any) => i.id === id);
-  if (index !== -1) {
-    items[index] = { ...items[index], ...updates };
-    await setTelegramCollection('marketplace_items.json', 'marketplace_items', items);
-    return items[index];
-  }
-  return null;
+  const list = await getMarketplaceItems();
+  const idx = list.findIndex((i: any) => i.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('marketplace_items.json', list);
+  return list[idx];
 };
 
 export const deleteMarketplaceItem = async (id: string) => {
-  const items = await getMarketplaceItems();
-  const filtered = items.filter((i: any) => i.id !== id);
-  await setTelegramCollection('marketplace_items.json', 'marketplace_items', filtered);
+  const list = await getMarketplaceItems();
+  const item = list.find((i: any) => i.id === id);
+  if (item?.telegramMessageId) {
+    try { await deleteFromTelegram(item.telegramMessageId); } catch (_) {}
+  }
+  await setCollection('marketplace_items.json', list.filter((i: any) => i.id !== id));
   return true;
 };
 
-// Advertisements operations
-export const getAdvertisements = async () => getTelegramCollection<any[]>('advertisements.json', 'advertisements', []);
+// ── Advertisements ────────────────────────────────────────────────────────────
+
+export const getAdvertisements = () => getCollection('advertisements.json');
 
 export const addAdvertisement = async (ad: any) => {
-  const ads = (await getAdvertisements()) || [];
-  ads.push(ad);
-  await setTelegramCollection('advertisements.json', 'advertisements', ads);
+  const list = await getAdvertisements();
+  list.push(ad);
+  await setCollection('advertisements.json', list);
   return ad;
 };
 
 export const updateAdvertisement = async (id: string, updates: any) => {
-  const ads = await getAdvertisements();
-  const index = ads.findIndex((a: any) => a.id === id);
-  if (index !== -1) {
-    ads[index] = { ...ads[index], ...updates };
-    await setTelegramCollection('advertisements.json', 'advertisements', ads);
-    return ads[index];
-  }
-  return null;
+  const list = await getAdvertisements();
+  const idx = list.findIndex((a: any) => a.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('advertisements.json', list);
+  return list[idx];
 };
 
 export const deleteAdvertisement = async (id: string) => {
-  const ads = await getAdvertisements();
-  const filtered = ads.filter((a: any) => a.id !== id);
-  await setTelegramCollection('advertisements.json', 'advertisements', filtered);
+  const list = await getAdvertisements();
+  const ad = list.find((a: any) => a.id === id);
+  if (ad?.telegramMessageId) {
+    try { await deleteFromTelegram(ad.telegramMessageId); } catch (_) {}
+  }
+  await setCollection('advertisements.json', list.filter((a: any) => a.id !== id));
   return true;
 };
 
-// Notices operations
-export const getNotices = async () => getTelegramCollection<any[]>('notices.json', 'notices', []);
+// ── Notices ───────────────────────────────────────────────────────────────────
+
+export const getNotices = () => getCollection('notices.json');
 
 export const addNotice = async (notice: any) => {
-  const notices = (await getNotices()) || [];
-  notices.push(notice);
-  await setTelegramCollection('notices.json', 'notices', notices);
+  const list = await getNotices();
+  list.push(notice);
+  await setCollection('notices.json', list);
   return notice;
 };
 
 export const updateNotice = async (id: string, updates: any) => {
-  const notices = await getNotices();
-  const index = notices.findIndex((n: any) => n.id === id);
-  if (index !== -1) {
-    notices[index] = { ...notices[index], ...updates };
-    await setTelegramCollection('notices.json', 'notices', notices);
-    return notices[index];
-  }
-  return null;
+  const list = await getNotices();
+  const idx = list.findIndex((n: any) => n.id === id);
+  if (idx === -1) return null;
+  list[idx] = { ...list[idx], ...updates };
+  await setCollection('notices.json', list);
+  return list[idx];
 };
 
 export const deleteNotice = async (id: string) => {
-  const notices = await getNotices();
-  const filtered = notices.filter((n: any) => n.id !== id);
-  await setTelegramCollection('notices.json', 'notices', filtered);
+  const list = await getNotices();
+  await setCollection('notices.json', list.filter((n: any) => n.id !== id));
   return true;
 };
 
-// Pending Payments operations
-export const getPendingPayments = async () => getTelegramCollection<any[]>('pending_payments.json', 'pending_payments', []);
+// ── Pending Payments ──────────────────────────────────────────────────────────
+
+export const getPendingPayments = () => getCollection('pending_payments.json');
 
 export const addPendingPayment = async (payment: any) => {
-  const payments = await getPendingPayments();
-  payments.push(payment);
-  await setTelegramCollection('pending_payments.json', 'pending_payments', payments);
+  const list = await getPendingPayments();
+  list.push(payment);
+  await setCollection('pending_payments.json', list);
   return payment;
 };
 
 export const removePendingPayment = async (checkoutRequestId: string) => {
-  const payments = await getPendingPayments();
-  const index = payments.findIndex((p: any) => p.checkoutRequestId === checkoutRequestId);
-  if (index !== -1) {
-    payments.splice(index, 1);
-    await setTelegramCollection('pending_payments.json', 'pending_payments', payments);
-    return true;
-  }
-  return false;
+  const list = await getPendingPayments();
+  const filtered = list.filter((p: any) => p.checkoutRequestId !== checkoutRequestId);
+  if (filtered.length === list.length) return false;
+  await setCollection('pending_payments.json', filtered);
+  return true;
 };
+
+// ── Subscriptions extra ───────────────────────────────────────────────────────
+
+export const getSubscriptionsByUser = async (userId: string) => {
+  const list = await getSubscriptions();
+  return list.filter((s: any) => s.userId === userId);
+};
+
+// ── Legacy Telegram helpers (kept for upload routes that still use them) ──────
+export { deleteFromTelegram } from './telegram';
