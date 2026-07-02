@@ -46,8 +46,6 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ email, password, deviceId }),
       }),
-        body: JSON.stringify({ email, password }),
-      }),
 
     register: (payload: {
       email: string;
