@@ -1,8 +1,8 @@
 // ── App metadata ──────────────────────────────────────────────────────────────
 // Bump APP_VERSION and APP_VERSION_CODE with every release.
 // The update checker compares APP_VERSION_CODE against the server's latest.
-export const APP_VERSION = '1.3.0';
-export const APP_VERSION_CODE = 4;
+export const APP_VERSION = '1.3.1';
+export const APP_VERSION_CODE = 5;
 
 // ── Expo project ──────────────────────────────────────────────────────────────
 export const EXPO_PROJECT_ID = '3e16ba97-2ec3-4aae-8e70-edd841d588b1';
