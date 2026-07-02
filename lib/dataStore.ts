@@ -162,14 +162,13 @@ export const getTelegramCollection = async <T>(
   const indexFilename = `${kind}_telegram.json`;
   let index = readJsonFile(indexFilename) as any;
 
-  // On process/container startup, fetch the latest index pointer from GitHub
+  // On process/container startup, ALWAYS fetch the latest index pointer from GitHub
   // to ensure we don't use a stale packaged index file.
   if (!startupSyncDone[kind]) {
-    console.log(`[Telegram Store ${kind}] Startup check: fetching latest index from GitHub...`);
+    console.log(`[Telegram Store ${kind}] Startup: fetching latest index from GitHub...`);
     const githubIndex = await fetchIndexFromGithub(indexFilename);
     if (githubIndex) {
       index = githubIndex;
-      // Cache it locally for subsequent requests in this container instance
       try { writeJsonFile(indexFilename, githubIndex); } catch { /* read-only fs */ }
     }
     startupSyncDone[kind] = true;
@@ -243,10 +242,8 @@ export const setTelegramCollection = async <T>(
         updatedAt: new Date().toISOString(),
       };
       try { writeJsonFile(indexFilename, indexData); } catch { /* read-only fs */ }
-      // Persist index pointer to GitHub so it survives Vercel redeploys
-      persistIndexToGithub(indexFilename, indexData).catch((e) =>
-        console.error(`[GitHub Persist] Background push failed for ${indexFilename}:`, e)
-      );
+      // Await GitHub persist so the index is durable before returning
+      await persistIndexToGithub(indexFilename, indexData);
     } else {
       console.error(`[Telegram Store ${kind}] Failed to upload to Telegram:`, result.error);
     }

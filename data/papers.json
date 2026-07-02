@@ -1,22 +1,5 @@
 [
   {
-    "id": "paper_1",
-    "title": "Mathematics 101 - Past Paper 2023",
-    "university": "univ_1",
-    "campus": "campus_1",
-    "yearOfStudy": "Year 1",
-    "course": "MATH 101",
-    "examPeriod": "December 2023",
-    "cost": 50,
-    "accessDuration": "30 Days",
-    "fileSize": "2.5 MB",
-    "uploadedAt": "2024-01-15T10:30:00Z",
-    "uploadedBy": "admin@studypal.com",
-    "telegramMessageId": "123456789",
-    "totalDownloads": 45,
-    "description": "Past paper for Mathematics 101 final exam"
-  },
-  {
     "id": "paper_38d31cde90eb",
     "title": "comp 414 - December 2024",
     "university": "Egerton University",
