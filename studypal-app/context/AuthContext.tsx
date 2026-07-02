@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import * as Application from 'expo-application';
 import { storage } from '../lib/storage';
 import { api } from '../lib/api';
+
+// Stable device identifier — unique per app install on Android
+async function getDeviceId(): Promise<string> {
+  const androidId = Application.getAndroidId();
+  return androidId || `device_${Math.random().toString(36).slice(2)}`;
+}
 
 interface User {
   id: string;
@@ -51,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await api.auth.login(email, password);
+    const deviceId = await getDeviceId();
+    const data = await api.auth.login(email, password, deviceId);
     await storage.setToken(data.token);
     await storage.setUser(data.user);
     setToken(data.token);
@@ -79,8 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await storage.setUser(data.user);
         setUser(data.user);
       }
-    } catch {
-      // Silently fail — stale data is fine
+    } catch (e: any) {
+      // If server says session is on another device, force logout immediately
+      if (e.message?.includes('another device') || e.message?.includes('Session invalidated')) {
+        await storage.clearAuth();
+        setToken(null);
+        setUser(null);
+      }
+      // Other errors: silently fail — stale data is fine
     }
   }, []);
 

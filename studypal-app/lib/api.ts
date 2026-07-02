@@ -1,5 +1,10 @@
 import { API_BASE_URL } from '../constants';
 import { storage } from './storage';
+import * as Application from 'expo-application';
+
+async function getDeviceId(): Promise<string> {
+  return Application.getAndroidId() || 'unknown';
+}
 
 async function request<T>(
   path: string,
@@ -14,6 +19,9 @@ async function request<T>(
   if (authenticated) {
     const token = await storage.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    // Always send device ID on authenticated requests so the server can verify the session
+    const deviceId = await getDeviceId();
+    if (deviceId) headers['X-Device-Id'] = deviceId;
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -33,9 +41,11 @@ async function request<T>(
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const api = {
   auth: {
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, deviceId: string) =>
       request<{ token: string; user: any }>('/api/auth/login', {
         method: 'POST',
+        body: JSON.stringify({ email, password, deviceId }),
+      }),
         body: JSON.stringify({ email, password }),
       }),
 

@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/auth';
 import { getUserById, checkPaperAccess } from '@/lib/dataStore';
 
-/**
- * GET /api/auth/me
- * Returns fresh user data from the database for the authenticated user.
- * Used to refresh stale localStorage profile data after login.
- */
 export async function GET(request: NextRequest) {
   try {
     const decoded = verifyRequestToken(request.headers.get('Authorization'));
@@ -17,6 +12,15 @@ export async function GET(request: NextRequest) {
     const user = await getUserById(decoded.userId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // ── Device check: reject if the request comes from a different device ──
+    const incomingDeviceId = request.headers.get('X-Device-Id');
+    if (incomingDeviceId && user.deviceId && user.deviceId !== incomingDeviceId) {
+      return NextResponse.json(
+        { error: 'Session invalidated. This account is logged in on another device.' },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({

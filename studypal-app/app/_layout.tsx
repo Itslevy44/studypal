@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as ScreenCapture from 'expo-screen-capture';
 import { AuthProvider } from '../context/AuthContext';
 import { UpdateModal } from '../components/UpdateModal';
 import { useUpdateChecker } from '../lib/useUpdateChecker';
@@ -34,6 +35,11 @@ function AppWithUpdateChecker() {
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+    // Prevent screenshots and screen recordings across the entire app
+    ScreenCapture.preventScreenCaptureAsync();
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync();
+    };
   }, []);
 
   return (

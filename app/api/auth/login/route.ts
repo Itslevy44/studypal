@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPassword, createToken } from '@/lib/auth';
-import { getUserByEmail, checkPaperAccess } from '@/lib/dataStore';
+import { getUserByEmail, checkPaperAccess, updateUser } from '@/lib/dataStore';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, deviceId } = await request.json();
 
-    // Validate input
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
@@ -14,28 +13,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
     const user = await getUserByEmail(email);
     if (!user) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    // Verify password
     const isValidPassword = await verifyPassword(password, user.passwordHash);
     if (!isValidPassword) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+
+    // ── Device lock: if a different device is already registered, block login ──
+    if (deviceId && user.deviceId && user.deviceId !== deviceId) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
+        {
+          error: 'This account is already active on another device. Sign out of the other device first, or contact support to reset your device.',
+        },
+        { status: 403 }
       );
     }
 
-    // Create JWT token
+    // Register or refresh the device ID on the user record
+    if (deviceId && user.deviceId !== deviceId) {
+      await updateUser(user.id, { deviceId });
+    }
+
     const token = createToken(user.id, user.email, user.role);
 
-    // Return user data (without password hash)
     return NextResponse.json({
       success: true,
       token,

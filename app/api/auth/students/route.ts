@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/auth';
-import { getUsers } from '@/lib/dataStore';
+import { getUsers, updateUser } from '@/lib/dataStore';
 
-/**
- * GET /api/auth/students
- * Returns the count (and optionally list) of registered students.
- * Requires admin authorization.
- */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -29,11 +24,36 @@ export async function GET(request: NextRequest) {
         university: u.university,
         campus: u.campus,
         yearOfStudy: u.yearOfStudy,
+        deviceId: u.deviceId || null,
         createdAt: u.createdAt,
       })),
     });
   } catch (error: any) {
     console.error('[Students API] Error:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch students' }, { status: 500 });
+  }
+}
+
+// PATCH /api/auth/students — admin can reset a user's device lock
+export async function PATCH(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    const tokenData = verifyRequestToken(authHeader);
+
+    if (!tokenData || tokenData.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 401 });
+    }
+
+    const { id, deviceId } = await request.json();
+    if (!id) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
+
+    await updateUser(id, { deviceId: deviceId ?? null });
+
+    return NextResponse.json({ success: true, message: 'Device lock reset successfully.' });
+  } catch (error: any) {
+    console.error('[Students PATCH] Error:', error);
+    return NextResponse.json({ error: error.message || 'Failed to reset device' }, { status: 500 });
   }
 }

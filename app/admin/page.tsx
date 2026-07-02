@@ -1441,6 +1441,8 @@ function AdsManager({ adminToken }: { adminToken: string }) {
 function StudentsManager({ adminToken }: { adminToken: string }) {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [message, setMessage] = useState({ text: '', isError: false });
 
   const fetchStudents = async () => {
     try {
@@ -1460,10 +1462,43 @@ function StudentsManager({ adminToken }: { adminToken: string }) {
     fetchStudents();
   }, []);
 
+  const showMsg = (text: string, isError = false) => {
+    setMessage({ text, isError });
+    setTimeout(() => setMessage({ text: '', isError: false }), 3500);
+  };
+
+  const handleResetDevice = async (studentId: string, studentName: string) => {
+    if (!confirm(`Reset device lock for ${studentName}? They will be able to log in from a new device.`)) return;
+    setResettingId(studentId);
+    try {
+      const res = await fetch('/api/auth/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ id: studentId, deviceId: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || 'Failed to reset device', true); return; }
+      showMsg(`✅ Device reset for ${studentName}. They can now log in from any device.`);
+      fetchStudents();
+    } catch (err: any) {
+      showMsg(err.message || 'Error', true);
+    } finally {
+      setResettingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
-        <h2 className="text-2xl font-black text-slate-900 mb-6">Registered Students</h2>
+        <h2 className="text-2xl font-black text-slate-900 mb-2">Registered Students</h2>
+        <p className="text-slate-500 text-sm mb-6">Use "Reset Device" if a student gets a new phone and can't log in.</p>
+
+        {message.text && (
+          <div className={`mb-6 p-4 rounded-2xl border text-sm font-medium ${message.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+            {message.text}
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-500 animate-pulse">Loading students...</p>
         ) : students.length === 0 ? (
@@ -1475,21 +1510,37 @@ function StudentsManager({ adminToken }: { adminToken: string }) {
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-3 font-bold text-slate-600">Name</th>
                   <th className="text-left py-3 font-bold text-slate-600">Email</th>
-                  <th className="text-left py-3 font-bold text-slate-600">University</th>
-                  <th className="text-left py-3 font-bold text-slate-600">Campus</th>
-                  <th className="text-left py-3 font-bold text-slate-600">Year</th>
+                  <th className="text-left py-3 font-bold text-slate-600 hidden md:table-cell">University</th>
+                  <th className="text-left py-3 font-bold text-slate-600 hidden lg:table-cell">Year</th>
+                  <th className="text-left py-3 font-bold text-slate-600">Device</th>
                   <th className="text-left py-3 font-bold text-slate-600">Joined</th>
+                  <th className="text-right py-3 font-bold text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                     <td className="py-3 font-medium text-slate-900">{s.fullName}</td>
-                    <td className="py-3 text-slate-600">{s.email}</td>
-                    <td className="py-3 text-slate-600">{s.university || '-'}</td>
-                    <td className="py-3 text-slate-600">{s.campus || '-'}</td>
-                    <td className="py-3 text-slate-600">{s.yearOfStudy || '-'}</td>
-                    <td className="py-3 text-slate-500">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '-'}</td>
+                    <td className="py-3 text-slate-600 text-xs">{s.email}</td>
+                    <td className="py-3 text-slate-600 hidden md:table-cell text-xs">{s.university || '-'}</td>
+                    <td className="py-3 text-slate-600 hidden lg:table-cell text-xs">{s.yearOfStudy || '-'}</td>
+                    <td className="py-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${s.deviceId ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {s.deviceId ? '🔒 Locked' : '🔓 Open'}
+                      </span>
+                    </td>
+                    <td className="py-3 text-slate-500 text-xs">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '-'}</td>
+                    <td className="py-3 text-right">
+                      {s.deviceId && (
+                        <button
+                          onClick={() => handleResetDevice(s.id, s.fullName)}
+                          disabled={resettingId !== null}
+                          className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                          {resettingId === s.id ? '…' : '🔄 Reset Device'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
