@@ -20,26 +20,36 @@ interface DownloadedPaper {
   savedAt: string;
 }
 
-// Scan expo-file-system docs dir for downloaded PDFs
+// Scan expo-file-system docs dir for downloaded PDFs.
+// Reads the companion .meta.json file (saved at download time) for proper names.
 async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
   try {
     const dir = FileSystem.documentDirectory!;
     const files = await FileSystem.readDirectoryAsync(dir);
     const pdfs = files.filter((f) => f.endsWith('.pdf'));
 
-    return pdfs.map((f) => {
-      // filename format: <paperId>.pdf
+    const results: DownloadedPaper[] = [];
+    for (const f of pdfs) {
       const id = f.replace('.pdf', '');
-      return {
+      const metaPath = `${dir}${id}.meta.json`;
+      let meta: Partial<DownloadedPaper> = {};
+      try {
+        const raw = await FileSystem.readAsStringAsync(metaPath);
+        meta = JSON.parse(raw);
+      } catch {
+        // no metadata file — fall back to id
+      }
+      results.push({
         id,
-        title: id,          // We store minimal metadata; ideally persist a JSON index
-        course: 'Paper',
-        examPeriod: '—',
-        yearOfStudy: '—',
+        title: meta.title || id,
+        course: meta.course || 'Paper',
+        examPeriod: meta.examPeriod || '—',
+        yearOfStudy: meta.yearOfStudy || '—',
         fileUri: `${dir}${f}`,
-        savedAt: new Date().toISOString(),
-      };
-    });
+        savedAt: meta.savedAt || new Date().toISOString(),
+      });
+    }
+    return results;
   } catch {
     return [];
   }
@@ -50,6 +60,8 @@ export default function DownloadsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewing, setViewing] = useState<DownloadedPaper | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const load = useCallback(async () => {
     const list = await listDownloadedPapers();
@@ -59,6 +71,29 @@ export default function DownloadsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Open a paper: read it as base64 and embed in a data URI to avoid
+  // Android WebView ERR_ACCESS_DENIED on file:// URIs.
+  const openPaper = async (paper: DownloadedPaper) => {
+    setPdfLoading(true);
+    setViewing(paper);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(paper.fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      setPdfBase64(base64);
+    } catch {
+      Alert.alert('Error', 'Could not open this PDF. The file may be corrupted.');
+      setViewing(null);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const closePaper = () => {
+    setViewing(null);
+    setPdfBase64(null);
+  };
 
   const handleDelete = async (paper: DownloadedPaper) => {
     Alert.alert(
@@ -70,6 +105,13 @@ export default function DownloadsScreen() {
           text: 'Remove', style: 'destructive',
           onPress: async () => {
             await FileSystem.deleteAsync(paper.fileUri, { idempotent: true });
+            // Also remove the companion metadata file
+            try {
+              await FileSystem.deleteAsync(
+                paper.fileUri.replace('.pdf', '.meta.json'),
+                { idempotent: true }
+              );
+            } catch { /* ignore */ }
             load();
           },
         },
@@ -82,22 +124,32 @@ export default function DownloadsScreen() {
       <SafeAreaView style={{ flex: 1, backgroundColor: '#020617' }}>
         {/* Viewer header */}
         <View style={styles.viewerHeader}>
-          <View>
+          <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={styles.viewerSecure}>🔒 Secure Viewer</Text>
             <Text style={styles.viewerTitle} numberOfLines={1}>{viewing.title}</Text>
           </View>
-          <TouchableOpacity onPress={() => setViewing(null)} style={styles.closeBtn}>
+          <TouchableOpacity onPress={closePaper} style={styles.closeBtn}>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
         </View>
-        <WebView
-          source={{ uri: viewing.fileUri }}
-          style={{ flex: 1 }}
-          allowsInlineMediaPlayback
-          javaScriptEnabled={false}
-          // Disable context menu and selection on Android
-          onLongPress={() => {}}
-        />
+
+        {pdfLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ color: '#94a3b8', marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
+          </View>
+        ) : pdfBase64 ? (
+          <WebView
+            source={{
+              // Embed PDF as a base64 data URI — works on Android without file:// permission errors
+              uri: `data:application/pdf;base64,${pdfBase64}`,
+            }}
+            style={{ flex: 1 }}
+            allowsInlineMediaPlayback
+            javaScriptEnabled={false}
+            originWhitelist={['*']}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -127,11 +179,14 @@ export default function DownloadsScreen() {
                 </Text>
               </View>
               <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardMeta}>{item.examPeriod} • Year {item.yearOfStudy}</Text>
+              <Text style={styles.cardMeta}>
+                {item.examPeriod !== '—' ? `${item.examPeriod} • ` : ''}
+                {item.yearOfStudy !== '—' ? `Year ${item.yearOfStudy}` : ''}
+              </Text>
               <View style={styles.cardActions}>
                 <TouchableOpacity
                   style={styles.viewBtn}
-                  onPress={() => setViewing(item)}
+                  onPress={() => openPaper(item)}
                 >
                   <Text style={styles.viewBtnText}>👁️  View Offline</Text>
                 </TouchableOpacity>
@@ -194,7 +249,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#1e293b',
   },
   viewerSecure: { color: '#818cf8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  viewerTitle: { color: '#fff', fontSize: 14, fontWeight: '700', maxWidth: 260 },
+  viewerTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#94a3b8', fontWeight: '700' },
 });

@@ -65,7 +65,20 @@ export default function PapersScreen() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (result.status === 200) {
-        Alert.alert('Downloaded!', `"${paper.title}" saved to your device.`);
+        // Save metadata alongside the PDF so the downloads screen can show proper names
+        const meta = {
+          id: paper.id,
+          title: paper.title || paper.course,
+          course: paper.course,
+          examPeriod: paper.examPeriod || '',
+          yearOfStudy: paper.yearOfStudy || '',
+          savedAt: new Date().toISOString(),
+        };
+        await FileSystem.writeAsStringAsync(
+          `${FileSystem.documentDirectory}${paper.id}.meta.json`,
+          JSON.stringify(meta)
+        );
+        Alert.alert('Downloaded!', `"${paper.title || paper.course}" saved to your device.`);
       } else {
         Alert.alert('Error', 'Failed to download paper.');
       }
@@ -129,7 +142,7 @@ export default function PapersScreen() {
           <Badge label={paper.course} />
           {free
             ? <Badge label="FREE" color="#059669" bg="#d1fae5" />
-            : <Badge label={`KES ${paper.cost}`} color="#7c3aed" bg="#ede9fe" />}
+            : <Badge label="Subscription" color="#7c3aed" bg="#ede9fe" />}
         </View>
         <Text style={styles.cardTitle} numberOfLines={2}>{paper.title}</Text>
         <Text style={styles.cardMeta}>
@@ -150,7 +163,7 @@ export default function PapersScreen() {
           />
         ) : (
           <GradientButton
-            label="Unlock All — KES 100"
+            label="Unlock All Papers — KES 100 / 3 months"
             onPress={() => setMpesaTarget(paper)}
             small style={styles.cardBtn}
           />

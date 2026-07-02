@@ -73,3 +73,4 @@ Vercel auto-deploys. All app users will see the update banner next time they ope
 | Version | Code | Build ID | Date | Notes |
 |---------|------|----------|------|-------|
 | 1.0.0 | 1 | 6815f51f-527d-464a-aee6-547d3a70eeb0 | 2026-07-01 | Initial release |
+| 1.1.0 | 2 | 5fb6e2e2-ed3e-44e4-a50b-d22bce6e13e2 | 2026-07-02 | Fix offline viewer, downloads naming, marketplace notices, update notifications |

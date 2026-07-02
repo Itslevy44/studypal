@@ -63,7 +63,11 @@ export default function MarketplaceScreen() {
 
       {/* Ad carousel */}
       {ads.length > 0 && (
-        <View style={styles.adBox}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={styles.adBox}
+          onPress={() => {/* future: open ad link */}}
+        >
           {ads[adIndex]?.telegramFileId && (
             <Image
               source={{ uri: `${API_BASE_URL}/api/media/telegram/${ads[adIndex].telegramFileId}` }}
@@ -73,6 +77,9 @@ export default function MarketplaceScreen() {
           <View style={styles.adOverlay}>
             <Badge label="Sponsored" color="#fff" bg="#d946ef" />
             <Text style={styles.adTitle}>{ads[adIndex]?.title}</Text>
+            {!!ads[adIndex]?.description && (
+              <Text style={styles.adDescription} numberOfLines={2}>{ads[adIndex].description}</Text>
+            )}
           </View>
           {ads.length > 1 && (
             <View style={styles.adDots}>
@@ -81,8 +88,29 @@ export default function MarketplaceScreen() {
               ))}
             </View>
           )}
-        </View>
+        </TouchableOpacity>
       )}
+
+      {/* Notice Board — always shown above items */}
+      <View style={styles.noticeSection}>
+        <Text style={styles.sectionTitle}>📢 Notice Board</Text>
+        {notices.length === 0 ? (
+          <Card style={styles.emptyNotice}>
+            <Text style={styles.emptyNoticeText}>No announcements at the moment.</Text>
+          </Card>
+        ) : (
+          notices.map((n) => (
+            <Card key={n.id} style={styles.noticeCard}>
+              <View style={styles.noticeTop}>
+                <Badge label={n.category} color={COLORS.primary} bg="#e0e7ff" />
+                <Text style={styles.noticeDate}>{new Date(n.createdAt).toLocaleDateString()}</Text>
+              </View>
+              <Text style={styles.noticeTitle}>{n.title}</Text>
+              <Text style={styles.noticeContent}>{n.content}</Text>
+            </Card>
+          ))
+        )}
+      </View>
 
       {/* Search */}
       <View style={styles.searchBox}>
@@ -172,23 +200,7 @@ export default function MarketplaceScreen() {
     );
   };
 
-  const renderFooter = () => (
-    notices.length > 0 ? (
-      <View style={styles.noticeSection}>
-        <Text style={styles.sectionTitle}>📢 Notice Board</Text>
-        {notices.map((n) => (
-          <Card key={n.id} style={styles.noticeCard}>
-            <View style={styles.noticeTop}>
-              <Badge label={n.category} color={COLORS.primary} bg="#e0e7ff" />
-              <Text style={styles.noticeDate}>{new Date(n.createdAt).toLocaleDateString()}</Text>
-            </View>
-            <Text style={styles.noticeTitle}>{n.title}</Text>
-            <Text style={styles.noticeContent}>{n.content}</Text>
-          </Card>
-        ))}
-      </View>
-    ) : null
-  );
+  const renderFooter = () => null;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -238,10 +250,11 @@ const styles = StyleSheet.create({
   list: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pageTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text.primary, marginBottom: 16 },
-  adBox: { height: 160, borderRadius: RADIUS.xl, overflow: 'hidden', marginBottom: 16, backgroundColor: '#1e1b4b', ...SHADOW.md },
+  adBox: { height: 200, borderRadius: RADIUS.xl, overflow: 'hidden', marginBottom: 16, backgroundColor: '#1e1b4b', ...SHADOW.md },
   adImage: { position: 'absolute', width: '100%', height: '100%', opacity: 0.7 },
-  adOverlay: { position: 'absolute', bottom: 14, left: 14, gap: 6 },
-  adTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  adOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, gap: 4, backgroundColor: 'rgba(0,0,0,0.35)' },
+  adTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  adDescription: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '500', lineHeight: 16 },
   adDots: { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { width: 14, backgroundColor: '#fff' },
@@ -288,12 +301,14 @@ const styles = StyleSheet.create({
   contactBox: { backgroundColor: '#1e293b', borderRadius: RADIUS.md, padding: 12, marginTop: 8 },
   contactLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   contactValue: { color: '#67e8f9', fontWeight: '700', fontSize: 14 },
-  noticeSection: { marginTop: 8 },
+  noticeSection: { marginBottom: 16 },
   noticeCard: { marginBottom: 12, padding: 14 },
   noticeTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   noticeDate: { fontSize: 11, color: COLORS.text.muted },
   noticeTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
   noticeContent: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 18 },
+  emptyNotice: { padding: 14, marginBottom: 12 },
+  emptyNoticeText: { fontSize: 12, color: COLORS.text.muted, textAlign: 'center' },
   empty: { alignItems: 'center', padding: 36, marginTop: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
   emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },

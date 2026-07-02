@@ -17,7 +17,7 @@ const steps = [
 ];
 
 // ── Update this on every new release ─────────────────────────────────────────
-const LATEST_VERSION = '1.0.0';
+const LATEST_VERSION = '1.1.0';
 // Once the EAS build finishes, replace this with your actual APK URL.
 // e.g. '/download/studypal-v1.0.0.apk' once you self-host it,
 // or keep the EAS build link below — it works for direct downloads too.

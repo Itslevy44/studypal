@@ -5,10 +5,10 @@ import { NextResponse } from 'next/server';
 // latestVersionCode MUST be bumped with every release.
 // downloadUrl should point to the public APK download link (e.g. GitHub Release or your domain).
 const CURRENT_RELEASE = {
-  latestVersion: '1.0.0',
-  latestVersionCode: 1,
+  latestVersion: '1.1.0',
+  latestVersionCode: 2,
   downloadUrl: 'https://studypal-rust.vercel.app/api/download/apk',
-  releaseNotes: '• Initial release\n• Browse and download past papers\n• M-Pesa payments\n• Marketplace\n• Offline downloads',
+  releaseNotes: '• Fixed offline PDF viewer (no more errors opening papers)\n• Downloads now show correct paper names\n• Notice board moved to top of Marketplace\n• Full ad info now displayed\n• Cleaner paper pricing\n• In-app update notifications',
   mandatory: false,
 };
 
