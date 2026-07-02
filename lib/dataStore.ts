@@ -1,125 +1,152 @@
 /**
- * dataStore.ts
+ * dataStore.ts — Telegram-backed persistent store
  *
- * GitHub is the single source of truth for all JSON collections.
- * Every read fetches the latest file directly from GitHub.
- * Every write commits the updated file back to GitHub immediately.
+ * Telegram bot tokens never expire, making this reliable for production.
  *
- * Telegram is used ONLY for binary file storage (PDFs, images).
- * The stale-Telegram-index problem is eliminated entirely.
+ * How it works:
+ * - All JSON collections are stored as documents sent to a Telegram channel.
+ * - Each write sends a NEW message with the full updated JSON.
+ * - Each read scans recent Telegram channel messages to find the latest
+ *   document for a given collection (identified by caption metadata).
+ * - A per-process in-memory cache prevents redundant Telegram API calls
+ *   within the same serverless invocation.
+ *
+ * Collections: papers, universities, users, subscriptions,
+ *              marketplace_items, advertisements, notices, pending_payments
  */
 
-import {
-  deleteFromTelegram,
-} from './telegram';
+import { deleteFromTelegram } from './telegram';
 
-const GITHUB_PAT = process.env.GITHUB_PAT;
-const GITHUB_REPO = 'Itslevy44/studypal';
-const GITHUB_BRANCH = 'main';
-const GITHUB_API = 'https://api.github.com';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID!;
+const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// ── In-memory write-through cache (per serverless instance) ──────────────────
-// Prevents multiple reads in the same request, but GitHub is always the source
-// on a fresh instance.
-const memCache: Record<string, { data: any; sha: string }> = {};
+// ── In-process cache ──────────────────────────────────────────────────────────
+interface CacheEntry { data: any[]; messageId: string; ts: number }
+const cache: Record<string, CacheEntry> = {};
+const CACHE_TTL_MS = 30_000; // 30 seconds
 
-async function githubGet(filePath: string): Promise<{ data: any; sha: string } | null> {
-  if (!GITHUB_PAT) {
-    console.error('[dataStore] GITHUB_PAT is not set');
-    return null;
-  }
+// ── Telegram helpers ──────────────────────────────────────────────────────────
 
-  const url = `${GITHUB_API}/repos/${GITHUB_REPO}/contents/${filePath}?ref=${GITHUB_BRANCH}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `token ${GITHUB_PAT}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-    // Always bypass any CDN cache
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error(`GitHub GET ${filePath} failed: ${res.status}`);
-  }
-
-  const file = await res.json();
-  const content = Buffer.from(file.content, 'base64').toString('utf8');
-  return { data: JSON.parse(content), sha: file.sha };
+async function tgGetUpdates(): Promise<any[]> {
+  // Use getUpdates with large limit to scan all recent messages
+  const res = await fetch(`${API}/getUpdates?limit=100&timeout=0`, { cache: 'no-store' });
+  const j = await res.json();
+  return j.ok ? j.result : [];
 }
 
-async function githubPut(filePath: string, data: any, currentSha?: string): Promise<string> {
-  if (!GITHUB_PAT) throw new Error('[dataStore] GITHUB_PAT is not set');
-
-  // Get current SHA if not provided
-  let sha = currentSha;
-  if (!sha) {
-    const existing = await githubGet(filePath);
-    sha = existing?.sha;
-  }
-
-  const content = Buffer.from(JSON.stringify(data, null, 2) + '\n').toString('base64');
-  const body: any = {
-    message: `data: update ${filePath.split('/').pop()}`,
-    content,
-    branch: GITHUB_BRANCH,
-  };
-  if (sha) body.sha = sha;
-
-  const res = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/contents/${filePath}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `token ${GITHUB_PAT}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`GitHub PUT ${filePath} failed: ${res.status} ${err.message || ''}`);
-  }
-
-  const result = await res.json();
-  return result.content.sha;
+async function tgGetChannelHistory(): Promise<any[]> {
+  // Forward latest messages to self trick — not reliable for all bots.
+  // Instead we rely on getUpdates which gives us recent channel posts.
+  return tgGetUpdates();
 }
 
-// ── Generic collection helpers ────────────────────────────────────────────────
-
-async function getCollection<T = any[]>(filename: string): Promise<T> {
-  // Check memory cache first (valid within same serverless invocation)
-  if (memCache[filename]) return memCache[filename].data as T;
-
-  const result = await githubGet(`data/${filename}`);
-  if (!result) return [] as unknown as T;
-
-  memCache[filename] = result;
-  return result.data as T;
+/** Download a file from Telegram by file_id and parse as JSON */
+async function tgDownloadJson<T>(fileId: string): Promise<T | null> {
+  try {
+    const r1 = await fetch(`${API}/getFile?file_id=${fileId}`, { cache: 'no-store' });
+    const j1 = await r1.json();
+    if (!j1.ok) return null;
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${j1.result.file_path}`;
+    const r2 = await fetch(fileUrl, { cache: 'no-store' });
+    const text = await r2.text();
+    return JSON.parse(text) as T;
+  } catch { return null; }
 }
 
-async function setCollection<T = any[]>(filename: string, data: T): Promise<T> {
-  const currentSha = memCache[filename]?.sha;
-  const newSha = await githubPut(`data/${filename}`, data, currentSha);
-  memCache[filename] = { data, sha: newSha };
+/** Upload a JSON collection to Telegram, return new messageId */
+async function tgUploadJson(kind: string, data: any[]): Promise<string | null> {
+  try {
+    const blob = new Blob(
+      [JSON.stringify(data, null, 2)],
+      { type: 'application/json' }
+    );
+    const file = new File([blob], `studypal_${kind}.json`, { type: 'application/json' });
+    const caption = JSON.stringify({ app: 'studypal_store', kind, savedAt: new Date().toISOString() });
+
+    const form = new FormData();
+    form.append('chat_id', CHAT_ID);
+    form.append('caption', caption);
+    form.append('document', file);
+
+    const res = await fetch(`${API}/sendDocument`, { method: 'POST', body: form });
+    const j = await res.json();
+    if (!j.ok) { console.error(`[TG Upload ${kind}]`, j.description); return null; }
+    return String(j.result.message_id);
+  } catch (e) { console.error(`[TG Upload ${kind}] exception:`, e); return null; }
+}
+
+/**
+ * Scan Telegram updates for the most recent document with caption.kind === kind.
+ * Returns { data, messageId } or null.
+ */
+async function tgFindLatest(kind: string): Promise<{ data: any[]; messageId: string } | null> {
+  const updates = await tgGetUpdates();
+  const chatIdStr = String(CHAT_ID);
+
+  // Collect all matching messages
+  const candidates: { messageId: string; fileId: string; savedAt: number }[] = [];
+
+  for (const upd of updates) {
+    const msg = upd.message || upd.channel_post || upd.edited_message || upd.edited_channel_post;
+    if (!msg) continue;
+    if (String(msg.chat?.id) !== chatIdStr) continue;
+    if (!msg.document?.file_id) continue;
+
+    let meta: any = {};
+    try { meta = JSON.parse(msg.caption || '{}'); } catch { continue; }
+    if (meta.app !== 'studypal_store' || meta.kind !== kind) continue;
+
+    candidates.push({
+      messageId: String(msg.message_id),
+      fileId: msg.document.file_id,
+      savedAt: Date.parse(meta.savedAt || '') || msg.message_id,
+    });
+  }
+
+  if (!candidates.length) return null;
+
+  // Pick most recent
+  candidates.sort((a, b) => b.savedAt - a.savedAt);
+  const best = candidates[0];
+
+  const data = await tgDownloadJson<any[]>(best.fileId);
+  if (!data) return null;
+  return { data: Array.isArray(data) ? data : [], messageId: best.messageId };
+}
+
+// ── Core read/write ───────────────────────────────────────────────────────────
+
+async function getCollection(kind: string): Promise<any[]> {
+  // Return from cache if still fresh
+  const cached = cache[kind];
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.data;
+
+  const result = await tgFindLatest(kind);
+  if (result) {
+    cache[kind] = { data: result.data, messageId: result.messageId, ts: Date.now() };
+    return result.data;
+  }
+
+  // Nothing in Telegram yet — return empty array
+  return [];
+}
+
+async function setCollection(kind: string, data: any[]): Promise<any[]> {
+  const msgId = await tgUploadJson(kind, data);
+  // Update cache immediately
+  cache[kind] = { data, messageId: msgId || '', ts: Date.now() };
   return data;
 }
 
-// ── Public helpers (used by api routes) ──────────────────────────────────────
+// ── Public helpers ────────────────────────────────────────────────────────────
 
-export const readJsonFile = (filename: string) => {
-  // Legacy sync helper — returns empty array; actual data comes from GitHub async
-  return [];
-};
+export const readJsonFile = (_f: string) => [];
+export const writeJsonFile = (_f: string, _d: any) => {};
 
-export const writeJsonFile = (_filename: string, _data: any) => {
-  // No-op — all writes go through setCollection → GitHub
-};
+// ── Universities ──────────────────────────────────────────────────────────────
 
-// ── Universities ─────────────────────────────────────────────────────────────
-
-export const getUniversities = () => getCollection('universities.json');
+export const getUniversities = () => getCollection('universities');
 
 export const getUniversityById = async (id: string) => {
   const list = await getUniversities();
@@ -129,7 +156,7 @@ export const getUniversityById = async (id: string) => {
 export const addUniversity = async (university: any) => {
   const list = await getUniversities();
   list.push(university);
-  await setCollection('universities.json', list);
+  await setCollection('universities', list);
   return university;
 };
 
@@ -138,29 +165,27 @@ export const updateUniversity = async (id: string, updates: any) => {
   const idx = list.findIndex((u: any) => u.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('universities.json', list);
+  await setCollection('universities', list);
   return list[idx];
 };
 
 export const deleteUniversity = async (id: string) => {
   const list = await getUniversities();
-  await setCollection('universities.json', list.filter((u: any) => u.id !== id));
+  await setCollection('universities', list.filter((u: any) => u.id !== id));
   return true;
 };
 
 // ── Papers ────────────────────────────────────────────────────────────────────
 
-export const getPapers = () => getCollection('papers.json');
+export const getPapers = () => getCollection('papers');
 
 export const getPapersByUniversity = async (univId: string) => {
   const [papers, universities] = await Promise.all([getPapers(), getUniversities()]);
-  const university = universities.find((u: any) => u.id === univId);
-  const universityName = university?.name;
+  const univ = universities.find((u: any) => u.id === univId);
+  const univName = univ?.name;
   return papers.filter((p: any) =>
-    p.university === univId ||
-    p.university === universityName ||
-    p.universityName === univId ||
-    p.universityName === universityName
+    p.university === univId || p.university === univName ||
+    p.universityName === univId || p.universityName === univName
   );
 };
 
@@ -172,7 +197,7 @@ export const getPaperById = async (id: string) => {
 export const addPaper = async (paper: any) => {
   const list = await getPapers();
   list.push(paper);
-  await setCollection('papers.json', list);
+  await setCollection('papers', list);
   return paper;
 };
 
@@ -181,19 +206,19 @@ export const updatePaper = async (id: string, updates: any) => {
   const idx = list.findIndex((p: any) => p.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('papers.json', list);
+  await setCollection('papers', list);
   return list[idx];
 };
 
 export const deletePaper = async (id: string) => {
   const list = await getPapers();
-  await setCollection('papers.json', list.filter((p: any) => p.id !== id));
+  await setCollection('papers', list.filter((p: any) => p.id !== id));
   return true;
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-export const getUsers = () => getCollection('users.json');
+export const getUsers = () => getCollection('users');
 
 export const getUserByEmail = async (email: string) => {
   const list = await getUsers();
@@ -208,7 +233,7 @@ export const getUserById = async (id: string) => {
 export const addUser = async (user: any) => {
   const list = await getUsers();
   list.push(user);
-  await setCollection('users.json', list);
+  await setCollection('users', list);
   return user;
 };
 
@@ -217,33 +242,36 @@ export const updateUser = async (id: string, updates: any) => {
   const idx = list.findIndex((u: any) => u.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('users.json', list);
+  await setCollection('users', list);
   return list[idx];
 };
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
 
-export const getSubscriptions = () => getCollection('subscriptions.json');
+export const getSubscriptions = () => getCollection('subscriptions');
+
+export const getSubscriptionsByUser = async (userId: string) => {
+  const list = await getSubscriptions();
+  return list.filter((s: any) => s.userId === userId);
+};
 
 export const checkPaperAccess = async (userId: string, _paperId?: string) => {
-  const subs = await getSubscriptions();
-  return subs.some((s: any) =>
-    s.userId === userId &&
-    s.status === 'active' &&
-    new Date(s.expiryDate) > new Date()
+  const list = await getSubscriptions();
+  return list.some((s: any) =>
+    s.userId === userId && s.status === 'active' && new Date(s.expiryDate) > new Date()
   );
 };
 
 export const addSubscription = async (subscription: any) => {
   const list = await getSubscriptions();
   list.push(subscription);
-  await setCollection('subscriptions.json', list);
+  await setCollection('subscriptions', list);
   return subscription;
 };
 
 // ── Marketplace Items ─────────────────────────────────────────────────────────
 
-export const getMarketplaceItems = () => getCollection('marketplace_items.json');
+export const getMarketplaceItems = () => getCollection('marketplace_items');
 
 export const getMarketplaceItemById = async (id: string) => {
   const list = await getMarketplaceItems();
@@ -253,7 +281,7 @@ export const getMarketplaceItemById = async (id: string) => {
 export const addMarketplaceItem = async (item: any) => {
   const list = await getMarketplaceItems();
   list.push(item);
-  await setCollection('marketplace_items.json', list);
+  await setCollection('marketplace_items', list);
   return item;
 };
 
@@ -262,7 +290,7 @@ export const updateMarketplaceItem = async (id: string, updates: any) => {
   const idx = list.findIndex((i: any) => i.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('marketplace_items.json', list);
+  await setCollection('marketplace_items', list);
   return list[idx];
 };
 
@@ -272,18 +300,18 @@ export const deleteMarketplaceItem = async (id: string) => {
   if (item?.telegramMessageId) {
     try { await deleteFromTelegram(item.telegramMessageId); } catch (_) {}
   }
-  await setCollection('marketplace_items.json', list.filter((i: any) => i.id !== id));
+  await setCollection('marketplace_items', list.filter((i: any) => i.id !== id));
   return true;
 };
 
 // ── Advertisements ────────────────────────────────────────────────────────────
 
-export const getAdvertisements = () => getCollection('advertisements.json');
+export const getAdvertisements = () => getCollection('advertisements');
 
 export const addAdvertisement = async (ad: any) => {
   const list = await getAdvertisements();
   list.push(ad);
-  await setCollection('advertisements.json', list);
+  await setCollection('advertisements', list);
   return ad;
 };
 
@@ -292,7 +320,7 @@ export const updateAdvertisement = async (id: string, updates: any) => {
   const idx = list.findIndex((a: any) => a.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('advertisements.json', list);
+  await setCollection('advertisements', list);
   return list[idx];
 };
 
@@ -302,18 +330,18 @@ export const deleteAdvertisement = async (id: string) => {
   if (ad?.telegramMessageId) {
     try { await deleteFromTelegram(ad.telegramMessageId); } catch (_) {}
   }
-  await setCollection('advertisements.json', list.filter((a: any) => a.id !== id));
+  await setCollection('advertisements', list.filter((a: any) => a.id !== id));
   return true;
 };
 
 // ── Notices ───────────────────────────────────────────────────────────────────
 
-export const getNotices = () => getCollection('notices.json');
+export const getNotices = () => getCollection('notices');
 
 export const addNotice = async (notice: any) => {
   const list = await getNotices();
   list.push(notice);
-  await setCollection('notices.json', list);
+  await setCollection('notices', list);
   return notice;
 };
 
@@ -322,24 +350,24 @@ export const updateNotice = async (id: string, updates: any) => {
   const idx = list.findIndex((n: any) => n.id === id);
   if (idx === -1) return null;
   list[idx] = { ...list[idx], ...updates };
-  await setCollection('notices.json', list);
+  await setCollection('notices', list);
   return list[idx];
 };
 
 export const deleteNotice = async (id: string) => {
   const list = await getNotices();
-  await setCollection('notices.json', list.filter((n: any) => n.id !== id));
+  await setCollection('notices', list.filter((n: any) => n.id !== id));
   return true;
 };
 
 // ── Pending Payments ──────────────────────────────────────────────────────────
 
-export const getPendingPayments = () => getCollection('pending_payments.json');
+export const getPendingPayments = () => getCollection('pending_payments');
 
 export const addPendingPayment = async (payment: any) => {
   const list = await getPendingPayments();
   list.push(payment);
-  await setCollection('pending_payments.json', list);
+  await setCollection('pending_payments', list);
   return payment;
 };
 
@@ -347,16 +375,8 @@ export const removePendingPayment = async (checkoutRequestId: string) => {
   const list = await getPendingPayments();
   const filtered = list.filter((p: any) => p.checkoutRequestId !== checkoutRequestId);
   if (filtered.length === list.length) return false;
-  await setCollection('pending_payments.json', filtered);
+  await setCollection('pending_payments', filtered);
   return true;
 };
 
-// ── Subscriptions extra ───────────────────────────────────────────────────────
-
-export const getSubscriptionsByUser = async (userId: string) => {
-  const list = await getSubscriptions();
-  return list.filter((s: any) => s.userId === userId);
-};
-
-// ── Legacy Telegram helpers (kept for upload routes that still use them) ──────
 export { deleteFromTelegram } from './telegram';
