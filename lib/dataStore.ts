@@ -1,18 +1,15 @@
 /**
- * dataStore.ts — Telegram-backed persistent store (v3)
+ * dataStore.ts — Telegram-backed store (v4 — file_id index)
  *
- * Architecture:
- * - Each collection (universities, papers, etc.) has its data stored as a
- *   Telegram document message in the channel.
- * - A single "index" message (pinned or known by ID) tracks the latest
- *   message ID for each collection.
- * - On read: fetch the index → get the message ID for the collection →
- *   download that document.
- * - On write: upload new document → update index with new message ID.
- * - The index message ID is stored in the INDEX_MESSAGE_ID env var,
- *   or auto-created on first run and logged so you can set it.
+ * The index is a JSON document stored in Telegram containing:
+ *   { universities: { fileId, msgId }, papers: { fileId, msgId }, ... }
  *
- * Telegram bot tokens NEVER expire — this is the reliable permanent store.
+ * TELEGRAM_INDEX_FILE_ID env var = the file_id of the index document.
+ * file_ids in Telegram never expire as long as the file exists.
+ *
+ * Flow:
+ *   read  → getFile(indexFileId) → download index JSON → get collection fileId → download collection
+ *   write → upload new collection doc → get new fileId → update index → upload new index → update TELEGRAM_INDEX_FILE_ID in memory
  */
 
 import { deleteFromTelegram } from './telegram';
@@ -21,60 +18,33 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const CHAT_ID   = process.env.TELEGRAM_CHAT_ID!;
 const API       = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// The message ID of our index document in the channel.
-// Set TELEGRAM_INDEX_MSG_ID env var after first deploy.
-let INDEX_MSG_ID: string | null = process.env.TELEGRAM_INDEX_MSG_ID || null;
+// The file_id of the current index document — loaded from env, updated on writes
+let INDEX_FILE_ID: string | null = process.env.TELEGRAM_INDEX_FILE_ID || null;
 
-// In-process cache: { [kind]: { data, msgId, ts } }
-interface CacheEntry { data: any[]; msgId: string; ts: number }
-const cache: Record<string, CacheEntry> = {};
-const CACHE_TTL = 15_000; // 15 seconds
+// In-process caches
+interface ColCache { data: any[]; fileId: string; ts: number }
+const colCache: Record<string, ColCache> = {};
+const COL_TTL = 20_000; // 20s
 
-// In-process index cache
-let indexCache: Record<string, string> | null = null; // kind → msgId
+interface IndexEntry { fileId: string; msgId: number }
+let indexCache: Record<string, IndexEntry> | null = null;
 let indexCacheTs = 0;
-const INDEX_CACHE_TTL = 10_000;
+const INDEX_TTL = 10_000; // 10s
 
-// ── Low-level Telegram helpers ────────────────────────────────────────────────
+// ── Telegram file helpers ─────────────────────────────────────────────────────
 
-async function tgDownloadByFileId(fileId: string): Promise<any[] | null> {
+async function tgDownload(fileId: string): Promise<string | null> {
   try {
-    const r1 = await fetch(`${API}/getFile?file_id=${fileId}`, { cache: 'no-store' });
-    const j1 = await r1.json();
-    if (!j1.ok) return null;
-    const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${j1.result.file_path}`;
+    const r = await fetch(`${API}/getFile?file_id=${encodeURIComponent(fileId)}`, { cache: 'no-store' });
+    const j = await r.json();
+    if (!j.ok) { console.error('[TG getFile]', j.description, 'fileId:', fileId); return null; }
+    const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${j.result.file_path}`;
     const r2 = await fetch(url, { cache: 'no-store' });
-    const text = await r2.text();
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    console.error('[TG Download]', e);
-    return null;
-  }
+    return await r2.text();
+  } catch (e) { console.error('[TG download]', e); return null; }
 }
 
-async function tgGetMessageFileId(msgId: string): Promise<string | null> {
-  // Forward message to same chat then get its file_id, then delete it
-  try {
-    const fwd = await fetch(`${API}/forwardMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: CHAT_ID, from_chat_id: CHAT_ID, message_id: parseInt(msgId) }),
-    });
-    const fj = await fwd.json();
-    if (!fj.ok) return null;
-    const fileId = fj.result?.document?.file_id || null;
-    // Clean up the forwarded copy
-    await fetch(`${API}/deleteMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: CHAT_ID, message_id: fj.result.message_id }),
-    });
-    return fileId;
-  } catch { return null; }
-}
-
-async function tgUploadJson(kind: string, data: any[]): Promise<string | null> {
+async function tgUpload(kind: string, data: any[]): Promise<{ fileId: string; msgId: number } | null> {
   try {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const file = new File([blob], `studypal_${kind}.json`, { type: 'application/json' });
@@ -85,59 +55,52 @@ async function tgUploadJson(kind: string, data: any[]): Promise<string | null> {
     form.append('document', file);
     const res = await fetch(`${API}/sendDocument`, { method: 'POST', body: form });
     const j = await res.json();
-    if (!j.ok) { console.error(`[TG Upload ${kind}]`, j.description); return null; }
-    return String(j.result.message_id);
-  } catch (e) { console.error(`[TG Upload ${kind}]`, e); return null; }
+    if (!j.ok) { console.error(`[TG upload ${kind}]`, j.description); return null; }
+    return { fileId: j.result.document.file_id, msgId: j.result.message_id };
+  } catch (e) { console.error(`[TG upload ${kind}]`, e); return null; }
+}
+
+async function tgDeleteMsg(msgId: number) {
+  fetch(`${API}/deleteMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: CHAT_ID, message_id: msgId }),
+  }).catch(() => {});
 }
 
 // ── Index management ──────────────────────────────────────────────────────────
 
-async function readIndex(): Promise<Record<string, string>> {
-  // Return cached index if fresh
-  if (indexCache && Date.now() - indexCacheTs < INDEX_CACHE_TTL) return indexCache;
+async function readIndex(): Promise<Record<string, IndexEntry>> {
+  if (indexCache && Date.now() - indexCacheTs < INDEX_TTL) return indexCache;
 
-  if (!INDEX_MSG_ID) {
-    console.warn('[dataStore] TELEGRAM_INDEX_MSG_ID not set — starting with empty index');
+  if (!INDEX_FILE_ID) {
+    console.warn('[dataStore] TELEGRAM_INDEX_FILE_ID not set');
     indexCache = {};
     indexCacheTs = Date.now();
     return {};
   }
 
-  const fileId = await tgGetMessageFileId(INDEX_MSG_ID);
-  if (!fileId) {
-    console.warn('[dataStore] Could not read index message', INDEX_MSG_ID);
-    indexCache = indexCache || {};
+  const text = await tgDownload(INDEX_FILE_ID);
+  if (!text) {
+    console.error('[dataStore] Failed to download index');
     return indexCache || {};
   }
 
-  const data = await tgDownloadByFileId(fileId);
-  const index = (data && !Array.isArray(data)) ? data as any : {};
-  // data might be parsed as array if JSON is wrong — handle object
-  const r1 = await fetch(`${API}/getFile?file_id=${fileId}`, { cache: 'no-store' });
-  const j1 = await r1.json();
-  if (j1.ok) {
-    const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${j1.result.file_path}`;
-    const r2 = await fetch(url, { cache: 'no-store' });
-    const text = await r2.text();
-    try {
-      const parsed = JSON.parse(text);
-      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
-        indexCache = parsed;
-        indexCacheTs = Date.now();
-        return parsed;
-      }
-    } catch {}
+  try {
+    const parsed = JSON.parse(text);
+    indexCache = parsed;
+    indexCacheTs = Date.now();
+    return parsed;
+  } catch (e) {
+    console.error('[dataStore] Index parse error', e);
+    return indexCache || {};
   }
-
-  indexCache = indexCache || {};
-  return indexCache || {};
 }
 
-async function writeIndex(index: Record<string, string>): Promise<void> {
+async function writeIndex(index: Record<string, IndexEntry>): Promise<void> {
   indexCache = index;
   indexCacheTs = Date.now();
 
-  // Upload index as JSON document
   const blob = new Blob([JSON.stringify(index, null, 2)], { type: 'application/json' });
   const file = new File([blob], 'studypal_index.json', { type: 'application/json' });
   const form = new FormData();
@@ -146,71 +109,58 @@ async function writeIndex(index: Record<string, string>): Promise<void> {
   form.append('document', file);
   const res = await fetch(`${API}/sendDocument`, { method: 'POST', body: form });
   const j = await res.json();
+  if (!j.ok) { console.error('[dataStore] Failed to upload index', j.description); return; }
 
-  if (j.ok) {
-    const newMsgId = String(j.result.message_id);
-    // If we had an old index message, delete it
-    if (INDEX_MSG_ID && INDEX_MSG_ID !== newMsgId) {
-      fetch(`${API}/deleteMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: CHAT_ID, message_id: parseInt(INDEX_MSG_ID) }),
-      }).catch(() => {});
-    }
-    INDEX_MSG_ID = newMsgId;
-    console.log(`[dataStore] Index updated → msgId ${newMsgId}. Set TELEGRAM_INDEX_MSG_ID=${newMsgId} in Vercel env.`);
+  const oldFileId = INDEX_FILE_ID;
+  INDEX_FILE_ID = j.result.document.file_id;
+
+  console.log(`[dataStore] Index updated. New file_id: ${INDEX_FILE_ID}`);
+  console.log(`[dataStore] Update TELEGRAM_INDEX_FILE_ID=${INDEX_FILE_ID} in Vercel env.`);
+
+  // Old index message cleanup (non-critical)
+  if (j.result.message_id > 1) {
+    // We can only delete if we know the old message ID — skip for now
   }
 }
 
-// ── Core collection read/write ─────────────────────────────────────────────────
+// ── Core CRUD ─────────────────────────────────────────────────────────────────
 
 async function getCollection(kind: string): Promise<any[]> {
-  // Check in-process cache
-  const cached = cache[kind];
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
+  const cached = colCache[kind];
+  if (cached && Date.now() - cached.ts < COL_TTL) return cached.data;
 
   const index = await readIndex();
-  const msgId = index[kind];
+  const entry = index[kind];
+  if (!entry?.fileId) { console.warn(`[dataStore] No index entry for ${kind}`); return []; }
 
-  if (!msgId) return [];
+  const text = await tgDownload(entry.fileId);
+  if (!text) { console.error(`[dataStore] Failed to download ${kind}`); return []; }
 
-  const fileId = await tgGetMessageFileId(msgId);
-  if (!fileId) return [];
-
-  const data = await tgDownloadByFileId(fileId);
-  if (!data) return [];
-
-  cache[kind] = { data, msgId, ts: Date.now() };
-  return data;
+  try {
+    const data = JSON.parse(text);
+    const arr = Array.isArray(data) ? data : [];
+    colCache[kind] = { data: arr, fileId: entry.fileId, ts: Date.now() };
+    return arr;
+  } catch { console.error(`[dataStore] Parse error for ${kind}`); return []; }
 }
 
 async function setCollection(kind: string, data: any[]): Promise<any[]> {
-  // Upload new document
-  const newMsgId = await tgUploadJson(kind, data);
-  if (!newMsgId) throw new Error(`Failed to save ${kind} to Telegram`);
+  const result = await tgUpload(kind, data);
+  if (!result) throw new Error(`[dataStore] Failed to upload ${kind}`);
 
-  // Update index
   const index = await readIndex();
-  const oldMsgId = index[kind];
-  index[kind] = newMsgId;
+  const oldEntry = index[kind];
+  index[kind] = { fileId: result.fileId, msgId: result.msgId };
   await writeIndex(index);
 
-  // Delete old data message (optional cleanup, non-critical)
-  if (oldMsgId) {
-    fetch(`${API}/deleteMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: CHAT_ID, message_id: parseInt(oldMsgId) }),
-    }).catch(() => {});
-  }
+  // Optionally delete old data message
+  if (oldEntry?.msgId) tgDeleteMsg(oldEntry.msgId);
 
-  // Update cache
-  cache[kind] = { data, msgId: newMsgId, ts: Date.now() };
+  colCache[kind] = { data, fileId: result.fileId, ts: Date.now() };
   return data;
 }
 
-// ── Public helpers ────────────────────────────────────────────────────────────
-
+// ── Public stubs ──────────────────────────────────────────────────────────────
 export const readJsonFile  = (_f: string) => [];
 export const writeJsonFile = (_f: string, _d: any) => {};
 
@@ -222,11 +172,10 @@ export const addUniversity = async (u: any) => {
   const list = await getUniversities(); list.push(u);
   await setCollection('universities', list); return u;
 };
-export const updateUniversity = async (id: string, updates: any) => {
+export const updateUniversity = async (id: string, upd: any) => {
   const list = await getUniversities();
-  const idx = list.findIndex((u: any) => u.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('universities', list); return list[idx];
+  const i = list.findIndex((u: any) => u.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('universities', list); return list[i];
 };
 export const deleteUniversity = async (id: string) => {
   const list = await getUniversities();
@@ -248,11 +197,10 @@ export const addPaper = async (p: any) => {
   const list = await getPapers(); list.push(p);
   await setCollection('papers', list); return p;
 };
-export const updatePaper = async (id: string, updates: any) => {
+export const updatePaper = async (id: string, upd: any) => {
   const list = await getPapers();
-  const idx = list.findIndex((p: any) => p.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('papers', list); return list[idx];
+  const i = list.findIndex((p: any) => p.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('papers', list); return list[i];
 };
 export const deletePaper = async (id: string) => {
   const list = await getPapers();
@@ -269,11 +217,10 @@ export const addUser = async (u: any) => {
   const list = await getUsers(); list.push(u);
   await setCollection('users', list); return u;
 };
-export const updateUser = async (id: string, updates: any) => {
+export const updateUser = async (id: string, upd: any) => {
   const list = await getUsers();
-  const idx = list.findIndex((u: any) => u.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('users', list); return list[idx];
+  const i = list.findIndex((u: any) => u.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('users', list); return list[i];
 };
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
@@ -296,11 +243,10 @@ export const addMarketplaceItem = async (item: any) => {
   const list = await getMarketplaceItems(); list.push(item);
   await setCollection('marketplace_items', list); return item;
 };
-export const updateMarketplaceItem = async (id: string, updates: any) => {
+export const updateMarketplaceItem = async (id: string, upd: any) => {
   const list = await getMarketplaceItems();
-  const idx = list.findIndex((i: any) => i.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('marketplace_items', list); return list[idx];
+  const i = list.findIndex((x: any) => x.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('marketplace_items', list); return list[i];
 };
 export const deleteMarketplaceItem = async (id: string) => {
   const list = await getMarketplaceItems();
@@ -315,11 +261,10 @@ export const addAdvertisement = async (ad: any) => {
   const list = await getAdvertisements(); list.push(ad);
   await setCollection('advertisements', list); return ad;
 };
-export const updateAdvertisement = async (id: string, updates: any) => {
+export const updateAdvertisement = async (id: string, upd: any) => {
   const list = await getAdvertisements();
-  const idx = list.findIndex((a: any) => a.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('advertisements', list); return list[idx];
+  const i = list.findIndex((a: any) => a.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('advertisements', list); return list[i];
 };
 export const deleteAdvertisement = async (id: string) => {
   const list = await getAdvertisements();
@@ -334,11 +279,10 @@ export const addNotice = async (n: any) => {
   const list = await getNotices(); list.push(n);
   await setCollection('notices', list); return n;
 };
-export const updateNotice = async (id: string, updates: any) => {
+export const updateNotice = async (id: string, upd: any) => {
   const list = await getNotices();
-  const idx = list.findIndex((n: any) => n.id === id); if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await setCollection('notices', list); return list[idx];
+  const i = list.findIndex((n: any) => n.id === id); if (i === -1) return null;
+  list[i] = { ...list[i], ...upd }; await setCollection('notices', list); return list[i];
 };
 export const deleteNotice = async (id: string) => {
   const list = await getNotices();
