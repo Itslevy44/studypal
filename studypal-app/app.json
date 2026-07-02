@@ -2,7 +2,7 @@
   "expo": {
     "name": "StudyPal",
     "slug": "studypal-app",
-    "version": "1.3.2",
+    "version": "1.3.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "studypal",
@@ -29,7 +29,7 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.studypal.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "INTERNET",
         "READ_EXTERNAL_STORAGE",
@@ -47,8 +47,8 @@
     },
     "extra": {
       "apiBaseUrl": "https://studypal-rust.vercel.app",
-      "appVersion": "1.0.0",
-      "appVersionCode": 1,
+      "appVersion": "1.3.3",
+      "appVersionCode": 7,
       "router": {
         "origin": false
       },
