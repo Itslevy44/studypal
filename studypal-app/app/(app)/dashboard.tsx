@@ -65,7 +65,20 @@ export default function DashboardScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (result.status === 200) {
-        Alert.alert('Downloaded!', `"${paper.title}" saved to your device.`);
+        // Save metadata so the offline screen shows the correct name
+        const meta = {
+          id: paper.id,
+          title: paper.title || paper.course,
+          course: paper.course,
+          examPeriod: paper.examPeriod || '',
+          yearOfStudy: paper.yearOfStudy || '',
+          savedAt: new Date().toISOString(),
+        };
+        await FileSystem.writeAsStringAsync(
+          `${FileSystem.documentDirectory}${paper.id}.meta.json`,
+          JSON.stringify(meta)
+        );
+        Alert.alert('Downloaded!', `"${paper.title || paper.course}" saved to your device.`);
       } else {
         Alert.alert('Error', 'Failed to download paper.');
       }
