@@ -29,6 +29,11 @@ export default function AdminDashboard() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState('');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  // Bootstrap state
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [bootstrapResult, setBootstrapResult] = useState<any>(null);
+  const [indexStatus, setIndexStatus] = useState<any>(null);
+  const [indexStatusLoading, setIndexStatusLoading] = useState(false);
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -216,6 +221,7 @@ export default function AdminDashboard() {
             { key: 'ads', label: 'Manage Ads', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
             { key: 'notices', label: 'Manage Notices', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
             { key: 'students', label: 'Students', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+            { key: 'bootstrap', label: 'Telegram Store', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
           ].map((item) => (
             <button
               key={item.key}
@@ -353,6 +359,20 @@ export default function AdminDashboard() {
 
           {tab === 'students' && (
             <StudentsManager adminToken={localStorage.getItem('adminToken') || ''} />
+          )}
+
+          {tab === 'bootstrap' && (
+            <TelegramBootstrapManager
+              adminToken={localStorage.getItem('adminToken') || ''}
+              bootstrapLoading={bootstrapLoading}
+              setBootstrapLoading={setBootstrapLoading}
+              bootstrapResult={bootstrapResult}
+              setBootstrapResult={setBootstrapResult}
+              indexStatus={indexStatus}
+              setIndexStatus={setIndexStatus}
+              indexStatusLoading={indexStatusLoading}
+              setIndexStatusLoading={setIndexStatusLoading}
+            />
           )}
         </div>
       </div>
@@ -624,6 +644,253 @@ function UniversitiesManager({ adminToken }: { adminToken: string }) {
   );
 }
 
+// ── TelegramBootstrapManager ──────────────────────────────────────────────────
+function TelegramBootstrapManager({
+  adminToken,
+  bootstrapLoading, setBootstrapLoading,
+  bootstrapResult, setBootstrapResult,
+  indexStatus, setIndexStatus,
+  indexStatusLoading, setIndexStatusLoading,
+}: {
+  adminToken: string;
+  bootstrapLoading: boolean; setBootstrapLoading: (v: boolean) => void;
+  bootstrapResult: any; setBootstrapResult: (v: any) => void;
+  indexStatus: any; setIndexStatus: (v: any) => void;
+  indexStatusLoading: boolean; setIndexStatusLoading: (v: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleBootstrap = async () => {
+    if (!confirm('⚠️ This will upload ALL local data (users, universities, papers, etc.) to Telegram and create a new index. Continue?')) return;
+    setBootstrapLoading(true);
+    setBootstrapResult(null);
+    try {
+      const res = await fetch('/api/admin/bootstrap', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json();
+      setBootstrapResult(data);
+    } catch (e: any) {
+      setBootstrapResult({ error: e.message || 'Request failed' });
+    } finally {
+      setBootstrapLoading(false);
+    }
+  };
+
+  const handleCheckStatus = async () => {
+    setIndexStatusLoading(true);
+    setIndexStatus(null);
+    try {
+      const res = await fetch('/api/admin/index-status', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json();
+      setIndexStatus(data);
+    } catch (e: any) {
+      setIndexStatus({ error: e.message || 'Request failed' });
+    } finally {
+      setIndexStatusLoading(false);
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="animate-fade-in space-y-8">
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-sky-600 p-8 shadow-xl shadow-indigo-500/20">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
+        <div className="relative z-10">
+          <p className="text-indigo-200 text-sm font-bold uppercase tracking-widest mb-2">Data Management</p>
+          <h2 className="text-3xl font-black text-white mb-2">📦 Telegram Store</h2>
+          <p className="text-indigo-200 max-w-xl">
+            All app data (users, universities, papers, ads, marketplace, notices) is stored as JSON files in Telegram.
+            Use the Bootstrap tool to initialise or re-sync the Telegram store from local data files.
+          </p>
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <span className="text-2xl">🗂️</span> How the Telegram Store Works
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { step: '1', title: 'Index File', desc: 'A master JSON file in Telegram maps each collection name to its file_id.', color: 'bg-indigo-50 border-indigo-200 text-indigo-700' },
+            { step: '2', title: 'Collections', desc: 'Each collection (users, papers, etc.) is a separate JSON array stored in Telegram.', color: 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-700' },
+            { step: '3', title: 'TELEGRAM_INDEX_FILE_ID', desc: 'Your .env.local must contain this env var pointing to the master index. Bootstrap gives you this value.', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+          ].map((item) => (
+            <div key={item.step} className={`rounded-xl border p-4 ${item.color}`}>
+              <div className="text-3xl font-black mb-2">{item.step}</div>
+              <p className="font-bold mb-1">{item.title}</p>
+              <p className="text-sm opacity-80">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Bootstrap */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <span className="text-2xl">🚀</span> Bootstrap Telegram Store
+          </h3>
+          <p className="text-sm text-slate-500 mb-5">
+            Uploads all local data files to Telegram and creates a new master index.
+            Run this once when setting up, or to re-sync after manually editing local files.
+          </p>
+          <button
+            onClick={handleBootstrap}
+            disabled={bootstrapLoading}
+            className="w-full rounded-xl py-4 text-sm font-bold text-white transition-all bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
+          >
+            {bootstrapLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Uploading to Telegram…
+              </span>
+            ) : '🚀 Run Bootstrap'}
+          </button>
+
+          {bootstrapResult && (
+            <div className={`mt-4 rounded-xl p-4 text-sm ${bootstrapResult.success ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+              {bootstrapResult.error ? (
+                <p className="text-red-700 font-semibold">❌ {bootstrapResult.error}</p>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-emerald-700 font-bold text-base">✅ Bootstrap Successful!</p>
+
+                  <div className="bg-white rounded-lg border border-emerald-200 p-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">New TELEGRAM_INDEX_FILE_ID</p>
+                    <p className="font-mono text-xs text-slate-800 break-all leading-relaxed">{bootstrapResult.indexFileId}</p>
+                    <button
+                      onClick={() => handleCopy(`TELEGRAM_INDEX_FILE_ID=${bootstrapResult.indexFileId}`)}
+                      className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                      {copied ? '✅ Copied!' : '📋 Copy env line'}
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-900 rounded-lg p-3 font-mono text-xs text-emerald-400 space-y-1">
+                    <p className="text-slate-400 mb-2"># Add to .env.local and Vercel env vars:</p>
+                    <p>TELEGRAM_INDEX_FILE_ID={bootstrapResult.indexFileId}</p>
+                  </div>
+
+                  {bootstrapResult.instructions && (
+                    <ol className="list-decimal list-inside space-y-1 text-slate-700 text-xs">
+                      {bootstrapResult.instructions.map((i: string, idx: number) => (
+                        <li key={idx}>{i}</li>
+                      ))}
+                    </ol>
+                  )}
+
+                  {bootstrapResult.collections && (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Collections Uploaded</p>
+                      <div className="space-y-1">
+                        {Object.entries(bootstrapResult.collections).map(([name, info]: [string, any]) => (
+                          <div key={name} className="flex items-center justify-between text-xs">
+                            <span className="font-mono text-slate-700">{name}</span>
+                            {info.error
+                              ? <span className="text-red-500 font-semibold">❌ {info.error}</span>
+                              : <span className="text-emerald-600 font-semibold">✅ {info.count} records</span>
+                            }
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Index Status */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <span className="text-2xl">🔍</span> Index Status Check
+          </h3>
+          <p className="text-sm text-slate-500 mb-5">
+            Check the current live TELEGRAM_INDEX_FILE_ID in the running process vs. the env var.
+            After writes, the index file_id changes — use this to see if your env var needs updating.
+          </p>
+          <button
+            onClick={handleCheckStatus}
+            disabled={indexStatusLoading}
+            className="w-full rounded-xl py-4 text-sm font-bold text-white transition-all bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 shadow-lg shadow-sky-500/25 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
+          >
+            {indexStatusLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Checking…
+              </span>
+            ) : '🔍 Check Status'}
+          </button>
+
+          {indexStatus && (
+            <div className={`mt-4 rounded-xl p-4 text-sm ${indexStatus.inSync ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+              {indexStatus.error ? (
+                <p className="text-red-700 font-semibold">❌ {indexStatus.error}</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-3 w-3 rounded-full ${indexStatus.inSync ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <p className={`font-bold ${indexStatus.inSync ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {indexStatus.inSync ? '✅ In sync' : '⚠️ Out of sync!'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <p className="font-bold uppercase tracking-widest text-slate-500 mb-0.5">Live (in-process)</p>
+                      <p className="font-mono text-slate-700 break-all">{indexStatus.currentIndexFileId || '(not set)'}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold uppercase tracking-widest text-slate-500 mb-0.5">Env var</p>
+                      <p className="font-mono text-slate-700 break-all">{indexStatus.envIndexFileId || '(not set)'}</p>
+                    </div>
+                  </div>
+
+                  {indexStatus.warning && (
+                    <div className="bg-amber-900/10 rounded-lg p-3">
+                      <p className="text-amber-800 text-xs font-semibold">{indexStatus.warning}</p>
+                      <button
+                        onClick={() => handleCopy(`TELEGRAM_INDEX_FILE_ID=${indexStatus.currentIndexFileId}`)}
+                        className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                      >
+                        {copied ? '✅ Copied!' : '📋 Copy new value'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Warning note */}
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-800">
+        <p className="font-bold mb-1">⚠️ Important: Keep TELEGRAM_INDEX_FILE_ID updated</p>
+        <p>
+          Every time data is written, the Telegram index file changes and gets a new file_id.
+          In serverless environments (Vercel), each cold start resets the in-process value.
+          Always keep <code className="bg-amber-100 px-1 rounded font-mono text-xs">TELEGRAM_INDEX_FILE_ID</code> in
+          your Vercel environment variables up to date — use the Index Status Check above after heavy writes.
+        </p>
+      </div>
+    </div>
+  );
+}
 function PaperUploadManager({ adminToken, onUploadSuccess }: { adminToken: string; onUploadSuccess: () => void }) {
   return (
     <div className="animate-fade-in">

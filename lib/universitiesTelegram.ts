@@ -1,7 +1,7 @@
 /**
  * universitiesTelegram.ts
- * Legacy wrapper — now delegates entirely to the GitHub-backed dataStore.
- * Kept so existing import paths in upload/route.ts don't break.
+ * Delegates entirely to the Telegram-backed dataStore.
+ * Kept so existing import paths in upload/route.ts and universities/route.ts don't break.
  */
 import {
   getUniversities,
@@ -9,6 +9,7 @@ import {
   addUniversity,
   updateUniversity,
   deleteUniversity,
+  setCollection,
 } from '@/lib/dataStore';
 
 type Campus = {
@@ -26,36 +27,35 @@ type University = {
 };
 
 export const getUniversitiesFromTelegramStore = (): Promise<University[]> =>
-  getUniversities();
+  getUniversities() as Promise<University[]>;
 
 export const setUniversitiesInTelegramStore = async (universities: University[]): Promise<University[]> => {
-  // Bulk replace — write each one; in practice this is called after a delete
-  // Just return the list; callers that need a full replace should use individual ops
+  await setCollection('universities', universities);
   return universities;
 };
 
 export const getUniversityFromTelegramStore = async (idOrName: string): Promise<University | undefined> => {
-  const list = await getUniversities();
-  return list.find((u: any) => u.id === idOrName || u.name === idOrName);
+  const list = await getUniversities() as University[];
+  return list.find((u) => u.id === idOrName || u.name === idOrName);
 };
 
 export const addUniversityToTelegramStore = async (university: University): Promise<University[]> => {
-  const list = await getUniversities();
-  if (list.some((u: any) => u.id === university.id || u.name === university.name)) {
+  const list = await getUniversities() as University[];
+  if (list.some((u) => u.id === university.id || u.name === university.name)) {
     throw new Error('University already exists.');
   }
   await addUniversity(university);
-  return getUniversities();
+  return getUniversities() as Promise<University[]>;
 };
 
 export const updateUniversityInTelegramStore = async (
   id: string,
   updates: Partial<University>
-): Promise<University | null> => updateUniversity(id, updates);
+): Promise<University | null> => updateUniversity(id, updates) as Promise<University | null>;
 
 export const deleteUniversityFromTelegramStore = async (id: string): Promise<boolean> => {
-  const list = await getUniversities();
-  if (!list.some((u: any) => u.id === id)) return false;
+  const list = await getUniversities() as University[];
+  if (!list.some((u) => u.id === id)) return false;
   await deleteUniversity(id);
   return true;
 };
