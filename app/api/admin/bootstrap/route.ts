@@ -94,6 +94,18 @@ async function uploadCollection(
 }
 
 // Upload the index document to Telegram
+async function pinMessage(msgId: number) {
+  try {
+    await fetch(`${API}/pinChatMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT_ID, message_id: msgId, disable_notification: true }),
+    });
+  } catch (e) {
+    console.warn('[Bootstrap] Could not pin index message:', e);
+  }
+}
+
 async function uploadIndex(
   index: Record<string, IndexEntry>
 ): Promise<{ fileId: string; msgId: number } | null> {
@@ -121,10 +133,12 @@ async function uploadIndex(
       console.error('[Bootstrap] Failed to upload index:', j.description);
       return null;
     }
-    return {
+    const result = {
       fileId: j.result.document.file_id,
       msgId: j.result.message_id,
     };
+    await pinMessage(result.msgId);
+    return result;
   } catch (e) {
     console.error('[Bootstrap] Exception uploading index:', e);
     return null;

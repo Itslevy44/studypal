@@ -82,12 +82,75 @@ async function tgDeleteMsg(msgId: number) {
   }).catch(() => {});
 }
 
+function parseJsonCaption(caption?: string): Record<string, unknown> | null {
+  if (!caption) return null;
+  try {
+    return JSON.parse(caption);
+  } catch {
+    return null;
+  }
+}
+
+function getStringMetadata(metadata: Record<string, unknown>, key: string): string | undefined {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+async function tgGetPinnedIndexEntry(): Promise<{ fileId: string; msgId: number } | null> {
+  try {
+    const res = await fetch(`${API}/getChat?chat_id=${CHAT_ID}`);
+    const json = await res.json();
+    if (!json.ok || !json.result?.pinned_message) return null;
+
+    const pinned = json.result.pinned_message as any;
+    const fileId = pinned.document?.file_id || pinned.photo?.[pinned.photo.length - 1]?.file_id;
+    const msgId = pinned.message_id;
+    if (!fileId || !msgId) return null;
+
+    const metadata = parseJsonCaption(pinned.caption);
+    if (getStringMetadata(metadata ?? {}, 'app') !== 'studypal_index') return null;
+
+    return { fileId, msgId };
+  } catch (error) {
+    console.warn('[dataStore] Failed to read pinned index entry from Telegram', error);
+    return null;
+  }
+}
+
+async function tgPinMessage(msgId: number) {
+  try {
+    await fetch(`${API}/pinChatMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT_ID, message_id: msgId, disable_notification: true }),
+    });
+  } catch (error) {
+    console.warn('[dataStore] Failed to pin Telegram index message', error);
+  }
+}
+
 // ── Index management ──────────────────────────────────────────────────────────
 
 async function readIndex(): Promise<Record<string, IndexEntry>> {
   if (!INDEX_FILE_ID) {
+    const pinnedEntry = await tgGetPinnedIndexEntry();
+    if (pinnedEntry) {
+      INDEX_FILE_ID = pinnedEntry.fileId;
+      INDEX_MSG_ID = pinnedEntry.msgId;
+      console.log('[dataStore] Using pinned index from Telegram chat.');
+    }
+  }
+
+  const pinnedEntry = await tgGetPinnedIndexEntry();
+  if (pinnedEntry && pinnedEntry.fileId !== INDEX_FILE_ID) {
+    INDEX_FILE_ID = pinnedEntry.fileId;
+    INDEX_MSG_ID = pinnedEntry.msgId;
+    console.log('[dataStore] Switched to latest pinned index from Telegram chat.');
+  }
+
+  if (!INDEX_FILE_ID) {
     console.error(
-      '[dataStore] ❌ TELEGRAM_INDEX_FILE_ID is not set!\n' +
+      '[dataStore] ❌ TELEGRAM_INDEX_FILE_ID is not set and no pinned index was found!\n' +
       '   → Call POST /api/admin/bootstrap (as admin) to initialize the Telegram store.\n' +
       '   → Copy the returned indexFileId into TELEGRAM_INDEX_FILE_ID in your .env.local\n' +
       '   → Also set it in your Vercel environment variables and redeploy.'
@@ -97,6 +160,13 @@ async function readIndex(): Promise<Record<string, IndexEntry>> {
 
   const text = await tgDownload(INDEX_FILE_ID);
   if (!text) {
+    console.warn('[dataStore] Failed to download index from TELEGRAM_INDEX_FILE_ID. Trying pinned index. fileId:', INDEX_FILE_ID);
+    const pinned = await tgGetPinnedIndexEntry();
+    if (pinned && pinned.fileId !== INDEX_FILE_ID) {
+      INDEX_FILE_ID = pinned.fileId;
+      INDEX_MSG_ID = pinned.msgId;
+      return readIndex();
+    }
     console.error('[dataStore] Failed to download index. fileId:', INDEX_FILE_ID);
     return {};
   }
@@ -104,7 +174,13 @@ async function readIndex(): Promise<Record<string, IndexEntry>> {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.error('[dataStore] Index parse error', e);
+    console.error('[dataStore] Index parse error', e, 'fileId:', INDEX_FILE_ID);
+    const pinned = await tgGetPinnedIndexEntry();
+    if (pinned && pinned.fileId !== INDEX_FILE_ID) {
+      INDEX_FILE_ID = pinned.fileId;
+      INDEX_MSG_ID = pinned.msgId;
+      return readIndex();
+    }
     return {};
   }
 }
@@ -118,7 +194,10 @@ async function writeIndex(index: Record<string, IndexEntry>): Promise<void> {
   form.append('document', file);
   const res = await fetch(`${API}/sendDocument`, { method: 'POST', body: form });
   const j = await res.json();
-  if (!j.ok) { console.error('[dataStore] Failed to upload index', j.description); return; }
+  if (!j.ok) {
+    console.error('[dataStore] Failed to upload index', j.description);
+    throw new Error('[dataStore] Failed to upload index to Telegram');
+  }
 
   // Delete old index message to keep the chat clean
   if (INDEX_MSG_ID && INDEX_MSG_ID !== j.result.message_id) {
@@ -129,6 +208,8 @@ async function writeIndex(index: Record<string, IndexEntry>): Promise<void> {
   const newMsgId  = j.result.message_id;
   INDEX_FILE_ID   = newFileId;
   INDEX_MSG_ID    = newMsgId;
+
+  await tgPinMessage(newMsgId);
 
   console.log(`[dataStore] ✅ Index updated. New file_id: ${newFileId}`);
   console.log(`[dataStore] 💡 If this is a new cold-start-safe value, update TELEGRAM_INDEX_FILE_ID=${newFileId} in your env vars.`);
