@@ -159,7 +159,7 @@ export default function DashboardScreen() {
                   <Badge label={paper.course} />
                   {free
                     ? <Badge label="FREE" color="#059669" bg="#d1fae5" />
-                    : <Badge label={`KES ${paper.cost}`} color="#7c3aed" bg="#ede9fe" />}
+                    : <Badge label="PAID" color="#7c3aed" bg="#ede9fe" />}
                 </View>
                 <Text style={styles.paperTitle} numberOfLines={2}>{paper.title}</Text>
                 <Text style={styles.paperMeta}>{paper.examPeriod} • {paper.yearOfStudy}</Text>
