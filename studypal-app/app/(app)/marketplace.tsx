@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, ActivityIndicator, Image, ScrollView,
+  TextInput, RefreshControl, ActivityIndicator, Image, ScrollView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -66,7 +66,10 @@ export default function MarketplaceScreen() {
         <TouchableOpacity
           activeOpacity={0.92}
           style={styles.adBox}
-          onPress={() => {/* future: open ad link */}}
+          onPress={() => {
+            const link = ads[adIndex]?.linkUrl;
+            if (link) Linking.openURL(link).catch(() => {});
+          }}
         >
           {ads[adIndex]?.telegramFileId && (
             <Image
@@ -79,6 +82,9 @@ export default function MarketplaceScreen() {
             <Text style={styles.adTitle}>{ads[adIndex]?.title}</Text>
             {!!ads[adIndex]?.description && (
               <Text style={styles.adDescription} numberOfLines={2}>{ads[adIndex].description}</Text>
+            )}
+            {!!ads[adIndex]?.linkUrl && (
+              <Text style={styles.adLink}>Tap to learn more →</Text>
             )}
           </View>
           {ads.length > 1 && (
@@ -255,6 +261,7 @@ const styles = StyleSheet.create({
   adOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, gap: 4, backgroundColor: 'rgba(0,0,0,0.35)' },
   adTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
   adDescription: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '500', lineHeight: 16 },
+  adLink: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 4, textDecorationLine: 'underline' },
   adDots: { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { width: 14, backgroundColor: '#fff' },
