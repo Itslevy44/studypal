@@ -105,6 +105,8 @@ export default function Home() {
             </div>
             <span className="text-xl font-extrabold bg-gradient-to-r from-indigo-600 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">StudyPal</span>
           </Link>
+
+          {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-500">
             <a href="#download" className="hover:text-indigo-600 transition-colors">Download</a>
             <a href="#features" className="hover:text-indigo-600 transition-colors">Features</a>
@@ -116,9 +118,52 @@ export default function Home() {
               ⬇ Download APK
             </a>
           </div>
-          <a href={APK_URL} className="md:hidden bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg shadow-indigo-500/25">
-            ⬇ APK
-          </a>
+
+          {/* Mobile Nav Toggle */}
+          <div className="flex items-center gap-3 md:hidden">
+            <a href={APK_URL} className="bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg shadow-indigo-500/25">
+              ⬇ APK
+            </a>
+            <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" />
+            <label htmlFor="mobile-menu-toggle" className="flex items-center p-2 text-slate-600 hover:text-indigo-600 cursor-pointer select-none">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </label>
+
+            {/* Mobile Drawer Backdrop */}
+            <label htmlFor="mobile-menu-toggle" className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm opacity-0 pointer-events-none peer-checked:opacity-100 peer-checked:pointer-events-auto transition-opacity duration-300" />
+
+            {/* Mobile Drawer Content */}
+            <div className="fixed top-0 right-0 bottom-0 z-50 w-72 bg-white p-6 shadow-2xl translate-x-full peer-checked:translate-x-0 transition-transform duration-300 flex flex-col gap-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center">
+                    <span className="text-white font-black text-xs">SP</span>
+                  </div>
+                  <span className="text-lg font-bold text-slate-800">StudyPal</span>
+                </div>
+                <label htmlFor="mobile-menu-toggle" className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-4 text-base font-semibold text-slate-600">
+                <a href="#download" className="hover:text-indigo-600 py-2 border-b border-slate-50 transition-colors">Download</a>
+                <a href="#features" className="hover:text-indigo-600 py-2 border-b border-slate-50 transition-colors">Features</a>
+                <a href="#how" className="hover:text-indigo-600 py-2 border-b border-slate-50 transition-colors">How It Works</a>
+              </div>
+
+              <a
+                href={APK_URL}
+                className="mt-auto bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white text-center py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/25 active:scale-95"
+              >
+                ⬇ Download APK
+              </a>
+            </div>
+          </div>
         </div>
       </nav>
 
