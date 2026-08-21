@@ -932,7 +932,7 @@ function AdminUploadPage({ onUploadSuccess }: { onUploadSuccess: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !university || !campus) {
+    if (!file || !university || (university !== 'all' && !campus)) {
       setMessage({ text: 'Please fill in all required fields and select a file.', isError: true });
       return;
     }
@@ -991,13 +991,14 @@ function AdminUploadPage({ onUploadSuccess }: { onUploadSuccess: () => void }) {
             <label className={labelClass}>University *</label>
             <select value={university} onChange={(e) => setUniversity(e.target.value)} className={SELECT_CLASS} required>
               <option value="">Select University</option>
+              <option value="all">🌍 All Universities (General)</option>
               {universities.map((univ) => (<option key={univ.id} value={univ.id}>{univ.name}</option>))}
             </select>
           </div>
           <div>
             <label className={labelClass}>Campus *</label>
-            <select value={campus} onChange={(e) => setCampus(e.target.value)} className={`${SELECT_CLASS} disabled:opacity-50 disabled:cursor-not-allowed`} required disabled={!campuses.length}>
-              <option value="">Select Campus</option>
+            <select value={campus} onChange={(e) => setCampus(e.target.value)} className={`${SELECT_CLASS} disabled:opacity-50 disabled:cursor-not-allowed`} required={university !== 'all'} disabled={university !== 'all' && !campuses.length}>
+              <option value="">{university === 'all' ? 'N/A — General Paper' : 'Select Campus'}</option>
               {campuses.map((c) => (<option key={c.id} value={c.name}>{c.name}</option>))}
             </select>
           </div>

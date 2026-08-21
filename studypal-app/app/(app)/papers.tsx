@@ -28,7 +28,7 @@ export default function PapersScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const universityName = (id: string) =>
-    universities.find((u) => u.id === id)?.name || id;
+    id === 'all' ? 'General (All Universities)' : (universities.find((u) => u.id === id)?.name || id);
 
   const loadPapers = useCallback(async (course = searchCourse, year = selectedYear) => {
     try {
@@ -54,6 +54,10 @@ export default function PapersScreen() {
   const onRefresh = () => { setRefreshing(true); loadPapers(); };
 
   const hasAccess = (p: any) => p.cost === 0 || !!(user as any)?.hasActiveSubscription;
+
+  // Split papers into general (all universities) and institution-specific
+  const generalPapers = papers.filter((p) => p.university === 'all');
+  const myPapers = papers.filter((p) => p.university !== 'all');
 
   const handleDownload = async (paper: any) => {
     setDownloadingId(paper.id);
@@ -129,15 +133,34 @@ export default function PapersScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* General papers section */}
+      {generalPapers.length > 0 && (
+        <View style={styles.generalSection}>
+          <View style={styles.generalHeader}>
+            <Text style={styles.generalTitle}>📌 General Papers</Text>
+            <Text style={styles.generalSub}>Available to all students</Text>
+          </View>
+          {generalPapers.map((paper) => renderPaperCard(paper))}
+          <View style={styles.divider} />
+        </View>
+      )}
+
+      {/* My university section header */}
+      {myPapers.length > 0 && (
+        <Text style={styles.sectionLabel}>
+          🏫 {universityName(user?.university ?? '')} Papers
+        </Text>
+      )}
     </>
   );
 
-  const renderItem = ({ item: paper }: { item: any }) => {
+  const renderPaperCard = (paper: any) => {
     const free = paper.cost === 0;
     const accessible = hasAccess(paper);
     const isDl = downloadingId === paper.id;
     return (
-      <Card style={styles.card} elevated>
+      <Card key={paper.id} style={styles.card} elevated>
         <View style={styles.cardTop}>
           <Badge label={paper.course} />
           {free
@@ -172,6 +195,8 @@ export default function PapersScreen() {
     );
   };
 
+  const renderItem = ({ item: paper }: { item: any }) => renderPaperCard(paper);
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       {loading ? (
@@ -180,7 +205,7 @@ export default function PapersScreen() {
         </View>
       ) : (
         <FlatList
-          data={papers}
+          data={myPapers}
           keyExtractor={(p) => p.id}
           renderItem={renderItem}
           ListHeaderComponent={renderHeader}
@@ -241,6 +266,12 @@ const styles = StyleSheet.create({
   cardMeta2: { flexDirection: 'row', gap: 6, marginBottom: 14 },
   metaSmall: { fontSize: 11, color: COLORS.text.muted },
   cardBtn: { width: '100%' },
+  generalSection: { marginBottom: 8 },
+  generalHeader: { marginBottom: 12 },
+  generalTitle: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
+  generalSub: { fontSize: 12, color: COLORS.text.secondary, marginTop: 2 },
+  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 20 },
+  sectionLabel: { fontSize: 15, fontWeight: '800', color: COLORS.text.primary, marginBottom: 12 },
   emptyCard: { alignItems: 'center', padding: 36, marginTop: 20 },
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },

@@ -281,6 +281,7 @@ export const getPapersByUniversity = async (univId: string) => {
   const [papers, univs] = await Promise.all([getPapers(), getUniversities()]);
   const name = (univs as any[]).find((u: any) => u.id === univId)?.name;
   return (papers as any[]).filter((p: any) =>
+    p.university === 'all' ||           // always include general papers for all users
     p.university === univId || p.university === name ||
     p.universityName === univId || p.universityName === name);
 };
