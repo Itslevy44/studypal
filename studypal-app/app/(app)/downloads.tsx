@@ -4,8 +4,8 @@ import {
   RefreshControl, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
-import * as IntentLauncher from 'expo-intent-launcher';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { COLORS, RADIUS } from '../../constants';
@@ -25,7 +25,6 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
     const dir = FileSystem.documentDirectory!;
     const files = await FileSystem.readDirectoryAsync(dir);
     const pdfs = files.filter((f) => f.endsWith('.pdf'));
-
     const results: DownloadedPaper[] = [];
     for (const f of pdfs) {
       const id = f.replace('.pdf', '');
@@ -34,9 +33,7 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
       try {
         const raw = await FileSystem.readAsStringAsync(metaPath);
         meta = JSON.parse(raw);
-      } catch {
-        // no metadata file — fall back to id
-      }
+      } catch { /* no metadata */ }
       results.push({
         id,
         title: meta.title || id,
@@ -48,16 +45,106 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
       });
     }
     return results;
-  } catch {
-    return [];
+  } catch { return []; }
+}
+
+/** Build a self-contained HTML page that renders a PDF from a base64 string using PDF.js */
+function buildPdfViewerHtml(base64: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; }
+  #loading { color: #818cf8; font-family: sans-serif; font-size: 14px; padding: 40px; text-align: center; }
+  canvas { display: block; width: 100%; margin-bottom: 8px; background: white; }
+  #controls {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(15,23,42,0.95); padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid #1e293b; z-index: 100;
   }
+  .ctrl-btn {
+    background: #4f46e5; color: white; border: none; border-radius: 8px;
+    padding: 8px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .ctrl-btn:disabled { opacity: 0.35; }
+  #page-info { color: #94a3b8; font-size: 13px; font-family: sans-serif; }
+  #pages { padding-bottom: 60px; width: 100%; }
+</style>
+</head>
+<body>
+<div id="loading">📄 Loading PDF...</div>
+<div id="pages"></div>
+<div id="controls" style="display:none">
+  <button class="ctrl-btn" id="prev" onclick="changePage(-1)">‹ Prev</button>
+  <span id="page-info">1 / 1</span>
+  <button class="ctrl-btn" id="next" onclick="changePage(1)">Next ›</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const base64 = '${base64}';
+const raw = atob(base64);
+const bytes = new Uint8Array(raw.length);
+for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+let pdfDoc = null, currentPage = 1;
+const scale = window.devicePixelRatio > 1 ? 1.5 : 1.2;
+
+async function renderPage(num) {
+  const page = await pdfDoc.getPage(num);
+  const viewport = page.getViewport({ scale });
+  const container = document.getElementById('pages');
+  let canvas = document.getElementById('page-' + num);
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'page-' + num;
+    container.appendChild(canvas);
+  }
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+}
+
+pdfjsLib.getDocument({ data: bytes }).promise.then(async (pdf) => {
+  pdfDoc = pdf;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('controls').style.display = 'flex';
+  document.getElementById('page-info').textContent = '1 / ' + pdf.numPages;
+  // Render all pages for smooth scrolling
+  for (let i = 1; i <= pdf.numPages; i++) {
+    await renderPage(i);
+  }
+}).catch((err) => {
+  document.getElementById('loading').textContent = '❌ Failed to load PDF: ' + err.message;
+});
+
+function changePage(delta) {
+  const newPage = currentPage + delta;
+  if (newPage < 1 || newPage > (pdfDoc ? pdfDoc.numPages : 1)) return;
+  currentPage = newPage;
+  const canvas = document.getElementById('page-' + newPage);
+  if (canvas) canvas.scrollIntoView({ behavior: 'smooth' });
+  document.getElementById('page-info').textContent = newPage + ' / ' + (pdfDoc ? pdfDoc.numPages : '?');
+  document.getElementById('prev').disabled = newPage === 1;
+  document.getElementById('next').disabled = newPage === (pdfDoc ? pdfDoc.numPages : 1);
+}
+</script>
+</body>
+</html>`;
 }
 
 export default function DownloadsScreen() {
   const [papers, setPapers] = useState<DownloadedPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<DownloadedPaper | null>(null);
+  const [pdfHtml, setPdfHtml] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const load = useCallback(async () => {
     const list = await listDownloadedPapers();
@@ -68,26 +155,25 @@ export default function DownloadsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Open PDF using Android's native PDF viewer via content URI
   const openPaper = async (paper: DownloadedPaper) => {
-    setOpeningId(paper.id);
+    setPdfLoading(true);
+    setViewing(paper);
     try {
-      // Get a content:// URI that Android can open with any PDF viewer
-      const contentUri = await FileSystem.getContentUriAsync(paper.fileUri);
-      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-        data: contentUri,
-        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-        type: 'application/pdf',
+      const base64 = await FileSystem.readAsStringAsync(paper.fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
-    } catch (e: any) {
-      Alert.alert(
-        'No PDF Viewer Found',
-        'Install a PDF viewer app (e.g. Adobe Acrobat, Google Drive) to open this paper.',
-        [{ text: 'OK' }]
-      );
+      setPdfHtml(buildPdfViewerHtml(base64));
+    } catch {
+      Alert.alert('Error', 'Could not open this PDF. The file may be corrupted.');
+      setViewing(null);
     } finally {
-      setOpeningId(null);
+      setPdfLoading(false);
     }
+  };
+
+  const closePaper = () => {
+    setViewing(null);
+    setPdfHtml(null);
   };
 
   const handleDelete = async (paper: DownloadedPaper) => {
@@ -113,6 +199,45 @@ export default function DownloadsScreen() {
     );
   };
 
+  // ── In-app PDF Viewer ──────────────────────────────────────────────────────
+  if (viewing) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }}>
+        {/* Header */}
+        <View style={styles.viewerHeader}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.viewerBadge}>🔒 Secure Viewer</Text>
+            <Text style={styles.viewerTitle} numberOfLines={1}>{viewing.title}</Text>
+          </View>
+          <TouchableOpacity onPress={closePaper} style={styles.closeBtn}>
+            <Text style={styles.closeText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {pdfLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ color: '#94a3b8', marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
+          </View>
+        ) : pdfHtml ? (
+          <WebView
+            source={{ html: pdfHtml }}
+            style={{ flex: 1, backgroundColor: '#1a1a2e' }}
+            originWhitelist={['*']}
+            javaScriptEnabled
+            allowsInlineMediaPlayback
+            // Block sharing / context menus
+            onLongPress={() => {}}
+            allowFileAccess={false}
+            // Allow loading PDF.js from CDN
+            mixedContentMode="always"
+          />
+        ) : null}
+      </SafeAreaView>
+    );
+  }
+
+  // ── Downloads List ─────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       {loading ? (
@@ -144,14 +269,10 @@ export default function DownloadsScreen() {
               </Text>
               <View style={styles.cardActions}>
                 <TouchableOpacity
-                  style={[styles.viewBtn, openingId === item.id && styles.viewBtnLoading]}
+                  style={styles.viewBtn}
                   onPress={() => openPaper(item)}
-                  disabled={openingId === item.id}
                 >
-                  {openingId === item.id
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={styles.viewBtnText}>👁️  Open PDF</Text>
-                  }
+                  <Text style={styles.viewBtnText}>📖  Read Paper</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteBtn}
@@ -203,7 +324,6 @@ const styles = StyleSheet.create({
     flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  viewBtnLoading: { opacity: 0.7 },
   viewBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   deleteBtn: {
     width: 44, height: 44, borderRadius: RADIUS.lg,
@@ -212,5 +332,14 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', padding: 36, marginTop: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
   emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center', lineHeight: 20 },
+  // Viewer
+  viewerHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#0f172a', paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#1e293b',
+  },
+  viewerBadge: { color: '#818cf8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  viewerTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
+  closeText: { color: '#94a3b8', fontWeight: '700', fontSize: 14 },
 });
-
