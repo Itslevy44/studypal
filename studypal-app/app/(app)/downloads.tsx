@@ -56,21 +56,22 @@ function buildPdfViewerHtml(base64: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; }
-  #loading { color: #818cf8; font-family: sans-serif; font-size: 14px; padding: 40px; text-align: center; }
-  canvas { display: block; width: 100%; margin-bottom: 8px; background: white; }
+  body { background: #f8fafc; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
+  #loading { color: #4f46e5; font-size: 14px; padding: 40px; text-align: center; }
+  canvas { display: block; width: 100%; margin-bottom: 6px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
   #controls {
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: rgba(15,23,42,0.95); padding: 10px 16px;
+    background: rgba(255,255,255,0.97); padding: 10px 16px;
     display: flex; align-items: center; justify-content: space-between;
-    border-top: 1px solid #1e293b; z-index: 100;
+    border-top: 1px solid #e2e8f0; z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
   }
   .ctrl-btn {
     background: #4f46e5; color: white; border: none; border-radius: 8px;
     padding: 8px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
   }
-  .ctrl-btn:disabled { opacity: 0.35; }
-  #page-info { color: #94a3b8; font-size: 13px; font-family: sans-serif; }
+  .ctrl-btn:disabled { opacity: 0.35; background: #c7d2fe; }
+  #page-info { color: #64748b; font-size: 13px; font-weight: 600; }
   #pages { padding-bottom: 60px; width: 100%; }
 </style>
 </head>
@@ -78,7 +79,7 @@ function buildPdfViewerHtml(base64: string): string {
 <div id="loading">📄 Loading PDF...</div>
 <div id="pages"></div>
 <div id="controls" style="display:none">
-  <button class="ctrl-btn" id="prev" onclick="changePage(-1)">‹ Prev</button>
+  <button class="ctrl-btn" id="prev" onclick="changePage(-1)" disabled>‹ Prev</button>
   <span id="page-info">1 / 1</span>
   <button class="ctrl-btn" id="next" onclick="changePage(1)">Next ›</button>
 </div>
@@ -115,23 +116,21 @@ pdfjsLib.getDocument({ data: bytes }).promise.then(async (pdf) => {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('controls').style.display = 'flex';
   document.getElementById('page-info').textContent = '1 / ' + pdf.numPages;
-  // Render all pages for smooth scrolling
-  for (let i = 1; i <= pdf.numPages; i++) {
-    await renderPage(i);
-  }
+  document.getElementById('next').disabled = pdf.numPages === 1;
+  for (let i = 1; i <= pdf.numPages; i++) await renderPage(i);
 }).catch((err) => {
-  document.getElementById('loading').textContent = '❌ Failed to load PDF: ' + err.message;
+  document.getElementById('loading').innerHTML = '❌ Failed to load PDF.<br><small>' + err.message + '</small>';
 });
 
 function changePage(delta) {
   const newPage = currentPage + delta;
-  if (newPage < 1 || newPage > (pdfDoc ? pdfDoc.numPages : 1)) return;
+  if (!pdfDoc || newPage < 1 || newPage > pdfDoc.numPages) return;
   currentPage = newPage;
   const canvas = document.getElementById('page-' + newPage);
   if (canvas) canvas.scrollIntoView({ behavior: 'smooth' });
-  document.getElementById('page-info').textContent = newPage + ' / ' + (pdfDoc ? pdfDoc.numPages : '?');
+  document.getElementById('page-info').textContent = newPage + ' / ' + pdfDoc.numPages;
   document.getElementById('prev').disabled = newPage === 1;
-  document.getElementById('next').disabled = newPage === (pdfDoc ? pdfDoc.numPages : 1);
+  document.getElementById('next').disabled = newPage === pdfDoc.numPages;
 }
 </script>
 </body>
@@ -202,7 +201,7 @@ export default function DownloadsScreen() {
   // ── In-app PDF Viewer ──────────────────────────────────────────────────────
   if (viewing) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
         {/* Header */}
         <View style={styles.viewerHeader}>
           <View style={{ flex: 1, marginRight: 12 }}>
@@ -217,19 +216,17 @@ export default function DownloadsScreen() {
         {pdfLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={{ color: '#94a3b8', marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
+            <Text style={{ color: '#64748b', marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
           </View>
         ) : pdfHtml ? (
           <WebView
             source={{ html: pdfHtml }}
-            style={{ flex: 1, backgroundColor: '#1a1a2e' }}
+            style={{ flex: 1, backgroundColor: '#f8fafc' }}
             originWhitelist={['*']}
             javaScriptEnabled
             allowsInlineMediaPlayback
-            // Block sharing / context menus
             onLongPress={() => {}}
             allowFileAccess={false}
-            // Allow loading PDF.js from CDN
             mixedContentMode="always"
           />
         ) : null}
@@ -335,11 +332,12 @@ const styles = StyleSheet.create({
   // Viewer
   viewerHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#0f172a', paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#1e293b',
+    backgroundColor: '#ffffff', paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    elevation: 2,
   },
-  viewerBadge: { color: '#818cf8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  viewerTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: '#94a3b8', fontWeight: '700', fontSize: 14 },
+  viewerBadge: { color: COLORS.primary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  viewerTitle: { color: COLORS.text.primary, fontSize: 14, fontWeight: '700' },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  closeText: { color: COLORS.text.secondary, fontWeight: '700', fontSize: 14 },
 });

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hashPassword, createToken } from '@/lib/auth';
-import { getUserByEmail, addUser } from '@/lib/dataStore';
+import { getUserByEmail, addUser, addSubscription } from '@/lib/dataStore';
 import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName, university, campus, yearOfStudy } = await request.json();
+    const { email, password, fullName, university, campus, yearOfStudy, phone } = await request.json();
 
-    // Validate input
     if (!email || !password || !fullName) {
       return NextResponse.json(
         { error: 'Email, password, and full name are required' },
@@ -15,7 +14,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
     const existingUser = await getUserByEmail(email);
     if (existingUser) {
       return NextResponse.json(
@@ -24,10 +22,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user
     const newUser = {
       id: `user_${crypto.randomBytes(8).toString('hex')}`,
       email: email.toLowerCase(),
@@ -36,16 +32,30 @@ export async function POST(request: NextRequest) {
       university: university || '',
       campus: campus || '',
       yearOfStudy: yearOfStudy || '',
+      phone: phone || '',
       role: 'student',
       createdAt: new Date().toISOString(),
     };
 
     await addUser(newUser);
 
-    // Create JWT token
+    // ── Grant 7-day free trial ──────────────────────────────────────────────
+    const trialExpiry = new Date();
+    trialExpiry.setDate(trialExpiry.getDate() + 7);
+    await addSubscription({
+      id: `trial_${crypto.randomBytes(6).toString('hex')}`,
+      userId: newUser.id,
+      paperId: 'all_access',
+      status: 'active',
+      expiryDate: trialExpiry.toISOString(),
+      receiptNumber: 'FREE_TRIAL',
+      amount: 0,
+      isTrial: true,
+      createdAt: new Date().toISOString(),
+    });
+
     const token = createToken(newUser.id, newUser.email, 'student');
 
-    // Return user data (without password hash)
     return NextResponse.json({
       success: true,
       token,
@@ -56,7 +66,9 @@ export async function POST(request: NextRequest) {
         university: newUser.university,
         campus: newUser.campus,
         yearOfStudy: newUser.yearOfStudy,
+        phone: newUser.phone,
         role: 'student',
+        hasActiveSubscription: true,
       },
     });
   } catch (error: any) {

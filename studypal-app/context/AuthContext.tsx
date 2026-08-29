@@ -26,7 +26,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (payload: {
     email: string; password: string; fullName: string;
-    university: string; campus: string; yearOfStudy: string;
+    university: string; campus: string; yearOfStudy: string; phone?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;

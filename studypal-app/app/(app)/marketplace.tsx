@@ -35,6 +35,7 @@ export default function MarketplaceScreen() {
       ]);
       setItems(itemsRes.items || []);
       setAds(adsRes.advertisements || []);
+      setAdIndex(0); // reset ad carousel to avoid out-of-bounds after refresh
       setNotices(noticesRes.notices || []);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }
@@ -207,7 +208,6 @@ export default function MarketplaceScreen() {
   };
 
   const renderFooter = () => null;
-
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       {loading ? (
@@ -243,7 +243,8 @@ export default function MarketplaceScreen() {
         defaultPhone={(user as any)?.phone ?? ''}
         onClose={() => setMpesaTarget(null)}
         onSuccess={() => {
-          setItems((prev) => prev.map((i) => i.id === mpesaTarget?.id ? { ...i, status: 'sold' } : i));
+          // Persist sold status to backend immediately
+          api.marketplace.items().then(() => loadData()).catch(() => {});
           setMpesaTarget(null);
         }}
       />

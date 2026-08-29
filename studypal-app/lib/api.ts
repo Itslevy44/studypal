@@ -119,6 +119,11 @@ export const api = {
     },
   },
 
+  // ── Subscriptions ──────────────────────────────────────────────────────────
+  subscriptions: {
+    active: () => request<{ subscription: any | null }>('/api/subscriptions/active', {}, true),
+  },
+
   // ── App Update ──────────────────────────────────────────────────────────────
   update: {
     check: () =>

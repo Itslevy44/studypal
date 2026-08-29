@@ -20,6 +20,7 @@ export default function RegisterScreen() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [university, setUniversity] = useState('');
@@ -57,7 +58,7 @@ export default function RegisterScreen() {
     setLoading(true);
     setError('');
     try {
-      await register({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password, university, campus, yearOfStudy });
+      await register({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password, university, campus, yearOfStudy, phone: phone.trim() });
       router.replace('/(app)/dashboard');
     } catch (e: any) {
       setError(e.message || 'Registration failed. Please try again.');
@@ -90,6 +91,7 @@ export default function RegisterScreen() {
 
         <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Jane Doe" autoCapitalize="words" />
         <Input label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@university.ac.ke" />
+        <Input label="Phone Number (M-Pesa)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 0712345678" />
 
         {/* University picker */}
         <Text style={styles.label}>University</Text>

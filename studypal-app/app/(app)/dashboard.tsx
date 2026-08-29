@@ -24,16 +24,20 @@ export default function DashboardScreen() {
   const [paperCount, setPaperCount] = useState(0);
   const [freePaperCount, setFreePaperCount] = useState(0);
   const [universityName, setUniversityName] = useState('');
+  const [subscriptionInfo, setSubscriptionInfo] = useState<{ expiryDate: string; isTrial: boolean } | null>(null);
 
   const [mpesaTarget, setMpesaTarget] = useState<any | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
+  // Refresh user once on mount only — not inside loadData to avoid re-render loop
+  useEffect(() => { refreshUser(); }, []);
+
   const loadData = useCallback(async () => {
     try {
-      await refreshUser();
-      const [papersData, univData] = await Promise.all([
+      const [papersData, univData, subsData] = await Promise.all([
         api.papers.list({ university: user?.university }),
         api.universities.list(),
+        api.subscriptions.active(),
       ]);
       const all: any[] = papersData.papers || [];
       setPapers(all.slice(0, 6));
@@ -41,6 +45,13 @@ export default function DashboardScreen() {
       setFreePaperCount(all.filter((p) => p.cost === 0).length);
       const found = (univData.universities || []).find((u: any) => u.id === user?.university);
       setUniversityName(found?.name || user?.university || '');
+      // Subscription expiry info
+      if (subsData?.subscription) {
+        setSubscriptionInfo({
+          expiryDate: subsData.subscription.expiryDate,
+          isTrial: subsData.subscription.isTrial || false,
+        });
+      }
     } catch {
       // Show stale data silently
     } finally {
@@ -133,6 +144,32 @@ export default function DashboardScreen() {
             <Text style={[styles.statValue, { color: COLORS.success }]}>{freePaperCount}</Text>
           </View>
         </View>
+
+        {/* Subscription expiry banner */}
+        {subscriptionInfo && (() => {
+          const daysLeft = Math.ceil((new Date(subscriptionInfo.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          if (daysLeft > 7) return null;
+          const expired = daysLeft <= 0;
+          const isTrial = subscriptionInfo.isTrial;
+          return (
+            <View style={[styles.subBanner, expired ? styles.subBannerExpired : daysLeft <= 3 ? styles.subBannerUrgent : styles.subBannerWarning]}>
+              <Text style={styles.subBannerText}>
+                {expired
+                  ? `⚠️ Your ${isTrial ? 'free trial' : 'subscription'} has expired. Renew to keep accessing papers.`
+                  : isTrial
+                    ? `🎁 Free trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left. Subscribe to keep access.`
+                    : `⏰ Subscription expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew now.`
+                }
+              </Text>
+              <TouchableOpacity
+                style={styles.subBannerBtn}
+                onPress={() => setMpesaTarget({ _renew: true })}
+              >
+                <Text style={styles.subBannerBtnText}>Renew — KES 100</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {/* Recent Papers header */}
         <View style={styles.sectionHeader}>
@@ -254,4 +291,12 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
   emptyText: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },
+  // Subscription banner
+  subBanner: { borderRadius: RADIUS.xl, padding: 14, marginBottom: 20 },
+  subBannerWarning: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' },
+  subBannerUrgent: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' },
+  subBannerExpired: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
+  subBannerText: { fontSize: 13, color: COLORS.text.primary, fontWeight: '600', marginBottom: 10, lineHeight: 18 },
+  subBannerBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 10, alignItems: 'center' },
+  subBannerBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 });
