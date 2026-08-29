@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 // Using a redirect instead of proxying because Vercel serverless functions
 // have a 4.5 MB response body limit (APK is ~70 MB).
 const APK_GITHUB_URL =
-  'https://raw.githubusercontent.com/Itslevy44/studypal/main/application-50b01d0d-4c03-4a84-b166-18c180459a55.apk';
+  'https://github.com/Itslevy44/studypal/releases/download/v1.4.1/studypal-v1.4.1.apk';
 
 export async function GET() {
   return NextResponse.redirect(APK_GITHUB_URL, { status: 302 });
