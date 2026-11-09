@@ -12,7 +12,9 @@ import { PaperCard } from '../../components/PaperCard';
 import { usePaperActions } from '../../hooks/usePaperActions';
 import { Ionicons } from '@expo/vector-icons';
 import { MpesaModal } from '../../components/MpesaModal';
-import { COLORS, RADIUS, SHADOW } from '../../constants';
+import { RADIUS, SHADOW } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 function greeting() {
   const h = new Date().getHours();
@@ -20,6 +22,8 @@ function greeting() {
 }
 
 export default function DashboardScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, refreshUser, logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,7 +90,7 @@ export default function DashboardScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Welcome Banner */}
         <View style={styles.banner}>
@@ -111,7 +115,7 @@ export default function DashboardScreen() {
           </View>
           <View style={[styles.statCard, SHADOW.sm]}>
             <Text style={styles.statLabel}>Free Papers</Text>
-            <Text style={[styles.statValue, { color: COLORS.success }]}>{freePaperCount}</Text>
+            <Text style={[styles.statValue, { color: colors.success }]}>{freePaperCount}</Text>
           </View>
         </View>
 
@@ -151,7 +155,7 @@ export default function DashboardScreen() {
 
         {papers.length === 0 ? (
           <Card style={styles.emptyCard}>
-            <Ionicons name="document-text-outline" size={44} color={COLORS.text.muted} />
+            <Ionicons name="document-text-outline" size={44} color={colors.text.muted} />
             <Text style={styles.emptyTitle}>No Papers Yet</Text>
             <Text style={styles.emptyText}>No papers are available for your university yet.</Text>
           </Card>
@@ -187,14 +191,14 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
   scroll: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: COLORS.text.secondary, fontSize: 14 },
+  loadingText: { color: c.text.secondary, fontSize: 14 },
   // Banner
   banner: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: c.primary,
     borderRadius: RADIUS.xxl,
     padding: 24,
     flexDirection: 'row',
@@ -219,32 +223,32 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: RADIUS.xl,
-    borderWidth: 1, borderColor: COLORS.border, padding: 18,
+    flex: 1, backgroundColor: c.surface, borderRadius: RADIUS.xl,
+    borderWidth: 1, borderColor: c.border, padding: 18,
   },
-  statLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: COLORS.text.muted, marginBottom: 8 },
-  statValue: { fontSize: 36, fontWeight: '900', color: COLORS.text.primary },
+  statLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: c.text.muted, marginBottom: 8 },
+  statValue: { fontSize: 36, fontWeight: '900', color: c.text.primary },
   // Section
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text.primary },
-  viewAll: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: c.text.primary },
+  viewAll: { fontSize: 13, fontWeight: '700', color: c.primary },
   // Paper card
   paperCard: { marginBottom: 12, padding: 18 },
   paperTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  paperTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
-  paperMeta: { fontSize: 12, color: COLORS.text.muted, marginBottom: 14 },
+  paperTitle: { fontSize: 14, fontWeight: '700', color: c.text.primary, marginBottom: 4 },
+  paperMeta: { fontSize: 12, color: c.text.muted, marginBottom: 14 },
   paperBtn: { width: '100%' },
   // Empty
   emptyCard: { alignItems: 'center', padding: 36 },
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
-  emptyText: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: c.text.primary, marginBottom: 6 },
+  emptyText: { fontSize: 13, color: c.text.secondary, textAlign: 'center' },
   // Subscription banner
   subBanner: { borderRadius: RADIUS.xl, padding: 14, marginBottom: 20 },
-  subBannerWarning: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' },
-  subBannerUrgent: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' },
-  subBannerExpired: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
-  subBannerText: { fontSize: 13, color: COLORS.text.primary, fontWeight: '600', marginBottom: 10, lineHeight: 18 },
-  subBannerBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 10, alignItems: 'center' },
+  subBannerWarning: { backgroundColor: c.warnSoft, borderWidth: 1, borderColor: c.warnBorder },
+  subBannerUrgent: { backgroundColor: c.orangeSoft, borderWidth: 1, borderColor: c.orangeBorder },
+  subBannerExpired: { backgroundColor: c.errorSoft, borderWidth: 1, borderColor: c.errorBorder },
+  subBannerText: { fontSize: 13, color: c.text.primary, fontWeight: '600', marginBottom: 10, lineHeight: 18 },
+  subBannerBtn: { backgroundColor: c.primary, borderRadius: RADIUS.lg, paddingVertical: 10, alignItems: 'center' },
   subBannerBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 });

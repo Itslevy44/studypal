@@ -15,7 +15,10 @@ export const API_BASE_URL = 'https://studypal-rust.vercel.app';
 // Endpoint the app polls to check for a newer APK
 export const UPDATE_CHECK_URL = `${API_BASE_URL}/api/app/version`;
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+export { LIGHT, DARK } from './theme';
+export type { Palette } from './theme';
+
+// ── Design tokens (legacy static light palette; prefer useTheme()) ─────────────────────────────────────────────────────────────
 export const COLORS = {
   primary: '#4f46e5',      // indigo-600
   primaryLight: '#818cf8', // indigo-400

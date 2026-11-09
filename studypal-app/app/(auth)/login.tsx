@@ -7,9 +7,12 @@ import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { GradientButton } from '../../components/ui/GradientButton';
-import { COLORS, RADIUS } from '../../constants';
+import { RADIUS } from '../../constants';
+import { useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 export default function LoginScreen() {
+  const styles = useThemedStyles(createStyles);
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -105,29 +108,29 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc' },
-  topBar: { height: 4, backgroundColor: COLORS.primary },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
+  topBar: { height: 4, backgroundColor: c.primary },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 48 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 36 },
   logoBox: {
     width: 48, height: 48, borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: c.primary,
     alignItems: 'center', justifyContent: 'center',
   },
   logoSP: { color: '#fff', fontWeight: '900', fontSize: 18 },
-  appName: { fontSize: 20, fontWeight: '800', color: COLORS.text.primary },
-  appSub: { fontSize: 11, color: COLORS.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  heading: { fontSize: 28, fontWeight: '800', color: COLORS.text.primary, marginBottom: 6 },
-  sub: { fontSize: 14, color: COLORS.text.secondary, marginBottom: 28 },
+  appName: { fontSize: 20, fontWeight: '800', color: c.text.primary },
+  appSub: { fontSize: 11, color: c.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  heading: { fontSize: 28, fontWeight: '800', color: c.text.primary, marginBottom: 6 },
+  sub: { fontSize: 14, color: c.text.secondary, marginBottom: 28 },
   errorBox: {
-    backgroundColor: '#fef2f2', borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: '#fecaca',
+    backgroundColor: c.errorSoft, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: c.errorBorder,
     padding: 14, marginBottom: 18,
   },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: '600' },
+  errorText: { color: c.error, fontSize: 13, fontWeight: '600' },
   btn: { marginTop: 8, marginBottom: 20 },
   linkRow: { alignItems: 'center' },
-  linkText: { fontSize: 14, color: COLORS.text.secondary },
-  link: { color: COLORS.primary, fontWeight: '700' },
+  linkText: { fontSize: 14, color: c.text.secondary },
+  link: { color: c.primary, fontWeight: '700' },
 });

@@ -12,7 +12,9 @@ import { PaperCardSkeleton } from '../../components/ui/Skeleton';
 import { PaperCard } from '../../components/PaperCard';
 import { MpesaModal } from '../../components/MpesaModal';
 import { usePaperActions } from '../../hooks/usePaperActions';
-import { COLORS, RADIUS, SHADOW } from '../../constants';
+import { RADIUS, SHADOW } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 const YEARS = ['', 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5'];
 type Sort = 'newest' | 'popular' | 'course';
@@ -23,6 +25,8 @@ const SORTS: { key: Sort; label: string }[] = [
 ];
 
 export default function PapersScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, refreshUser } = useAuth();
   const actions = usePaperActions();
 
@@ -106,11 +110,11 @@ export default function PapersScreen() {
       <Text style={styles.pageSub}>{universityName(user?.university ?? '')}</Text>
 
       <View style={[styles.searchBox, SHADOW.sm]}>
-        <Ionicons name="search" size={18} color={COLORS.text.muted} />
+        <Ionicons name="search" size={18} color={colors.text.muted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by course, e.g. MATH 101"
-          placeholderTextColor={COLORS.text.muted}
+          placeholderTextColor={colors.text.muted}
           value={query}
           onChangeText={setQuery}
           returnKeyType="search"
@@ -118,7 +122,7 @@ export default function PapersScreen() {
         />
         {query ? (
           <TouchableOpacity onPress={() => setQuery('')} hitSlop={10}>
-            <Ionicons name="close-circle" size={18} color={COLORS.text.muted} />
+            <Ionicons name="close-circle" size={18} color={colors.text.muted} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -129,7 +133,7 @@ export default function PapersScreen() {
           onPress={() => setSavedOnly((s) => !s)}
         >
           <Ionicons name={savedOnly ? 'bookmark' : 'bookmark-outline'} size={13}
-            color={savedOnly ? '#fff' : COLORS.text.secondary} />
+            color={savedOnly ? '#fff' : colors.text.secondary} />
           <Text style={[styles.pillText, savedOnly && styles.pillTextActive]}>Saved</Text>
         </TouchableOpacity>
         {YEARS.map((y) => (
@@ -149,7 +153,7 @@ export default function PapersScreen() {
           style={styles.sortBtn}
           onPress={() => setSort((s) => SORTS[(SORTS.findIndex((x) => x.key === s) + 1) % SORTS.length].key)}
         >
-          <Ionicons name="swap-vertical" size={14} color={COLORS.primary} />
+          <Ionicons name="swap-vertical" size={14} color={colors.primary} />
           <Text style={styles.sortText}>{SORTS.find((s) => s.key === sort)!.label}</Text>
         </TouchableOpacity>
       </View>
@@ -168,7 +172,7 @@ export default function PapersScreen() {
             <View><PaperCardSkeleton /><PaperCardSkeleton /><PaperCardSkeleton /></View>
           ) : (
             <Card style={styles.empty}>
-              <Ionicons name={savedOnly ? 'bookmark-outline' : 'document-text-outline'} size={44} color={COLORS.text.muted} />
+              <Ionicons name={savedOnly ? 'bookmark-outline' : 'document-text-outline'} size={44} color={colors.text.muted} />
               <Text style={styles.emptyTitle}>{savedOnly ? 'No saved papers' : 'No papers found'}</Text>
               <Text style={styles.emptySub}>
                 {savedOnly ? 'Tap the bookmark on a paper to keep it here.' : 'Try a different course or year.'}
@@ -178,7 +182,7 @@ export default function PapersScreen() {
         }
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} tintColor={COLORS.primary}
+          <RefreshControl refreshing={refreshing} tintColor={colors.primary}
             onRefresh={() => { setRefreshing(true); load(); actions.refreshDownloaded(); }} />
         }
         keyboardShouldPersistTaps="handled"
@@ -199,31 +203,31 @@ export default function PapersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
   list: { padding: 20, paddingBottom: 40 },
-  pageTitle: { fontSize: 28, fontWeight: '800', color: COLORS.text.primary },
-  pageSub: { fontSize: 13, color: COLORS.text.secondary, marginTop: 2, marginBottom: 16 },
+  pageTitle: { fontSize: 28, fontWeight: '800', color: c.text.primary },
+  pageSub: { fontSize: 13, color: c.text.secondary, marginTop: 2, marginBottom: 16 },
   searchBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff',
-    borderRadius: RADIUS.xl, borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.surface,
+    borderRadius: RADIUS.xl, borderWidth: 1, borderColor: c.border,
     paddingHorizontal: 14, marginBottom: 14,
   },
-  searchInput: { flex: 1, height: 48, fontSize: 14, fontWeight: '500', color: COLORS.text.primary },
+  searchInput: { flex: 1, height: 48, fontSize: 14, fontWeight: '500', color: c.text.primary },
   pills: { gap: 8, paddingBottom: 4 },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: '#eef2f7',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: c.surfaceAlt,
   },
-  pillActive: { backgroundColor: COLORS.primary },
-  pillSaved: { backgroundColor: COLORS.secondary },
-  pillText: { fontSize: 12, fontWeight: '700', color: COLORS.text.secondary },
+  pillActive: { backgroundColor: c.primary },
+  pillSaved: { backgroundColor: c.secondary },
+  pillText: { fontSize: 12, fontWeight: '700', color: c.text.secondary },
   pillTextActive: { color: '#fff' },
   sortRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 14 },
-  count: { fontSize: 12, fontWeight: '600', color: COLORS.text.muted },
+  count: { fontSize: 12, fontWeight: '600', color: c.text.muted },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sortText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  sortText: { fontSize: 12, fontWeight: '700', color: c.primary },
   empty: { alignItems: 'center', padding: 36, marginTop: 8, gap: 8 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text.primary },
-  emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: c.text.primary },
+  emptySub: { fontSize: 13, color: c.text.secondary, textAlign: 'center' },
 });

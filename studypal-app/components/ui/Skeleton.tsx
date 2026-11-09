@@ -1,10 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, DimensionValue, StyleSheet, View, ViewStyle } from 'react-native';
 import { RADIUS } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 export function Skeleton({ width = '100%', height = 14, style }: {
   width?: DimensionValue; height?: number; style?: ViewStyle;
 }) {
+  const { colors } = useTheme();
   const pulse = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([
@@ -14,10 +17,11 @@ export function Skeleton({ width = '100%', height = 14, style }: {
     loop.start();
     return () => loop.stop();
   }, [pulse]);
-  return <Animated.View style={[{ width, height, borderRadius: 6, backgroundColor: '#e2e8f0', opacity: pulse }, style]} />;
+  return <Animated.View style={[{ width, height, borderRadius: 6, backgroundColor: colors.border, opacity: pulse }, style]} />;
 }
 
 export function PaperCardSkeleton() {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.card}>
       <View style={styles.row}>
@@ -31,10 +35,10 @@ export function PaperCardSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   card: {
-    backgroundColor: '#fff', borderRadius: RADIUS.xl, borderWidth: 1,
-    borderColor: '#e2e8f0', padding: 18, marginBottom: 14,
+    backgroundColor: c.surface, borderRadius: RADIUS.xl, borderWidth: 1,
+    borderColor: c.border, padding: 18, marginBottom: 14,
   },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
 });

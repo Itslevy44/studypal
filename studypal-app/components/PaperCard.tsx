@@ -5,7 +5,9 @@ import * as Haptics from 'expo-haptics';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { GradientButton } from './ui/GradientButton';
-import { COLORS, RADIUS } from '../constants';
+import { RADIUS } from '../constants';
+import { useTheme, useThemedStyles } from '../context/ThemeContext';
+import type { Palette } from '../constants/theme';
 
 interface Props {
   paper: any;
@@ -24,6 +26,8 @@ function PaperCardBase({
   paper, subtitle, accessible, bookmarked, downloaded, progress,
   onDownload, onUnlock, onToggleBookmark,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const free = paper.cost === 0;
   const downloading = progress !== null;
   const pct = downloading ? Math.round((progress ?? 0) * 100) : 0;
@@ -34,8 +38,8 @@ function PaperCardBase({
         <View style={styles.badges}>
           <Badge label={paper.course} />
           {free
-            ? <Badge label="FREE" color="#059669" bg="#d1fae5" />
-            : <Badge label="PREMIUM" color="#7c3aed" bg="#ede9fe" />}
+            ? <Badge label="FREE" color={colors.successText} bg={colors.successSoft} />
+            : <Badge label="PREMIUM" color={colors.premiumText} bg={colors.premiumSoft} />}
         </View>
         <TouchableOpacity
           hitSlop={12}
@@ -49,7 +53,7 @@ function PaperCardBase({
           <Ionicons
             name={bookmarked ? 'bookmark' : 'bookmark-outline'}
             size={22}
-            color={bookmarked ? COLORS.primary : COLORS.text.muted}
+            color={bookmarked ? colors.primary : colors.text.muted}
           />
         </TouchableOpacity>
       </View>
@@ -60,13 +64,13 @@ function PaperCardBase({
       </Text>
 
       <View style={styles.stats}>
-        <Ionicons name="document-outline" size={13} color={COLORS.text.muted} />
+        <Ionicons name="document-outline" size={13} color={colors.text.muted} />
         <Text style={styles.statText}>{paper.fileSize}</Text>
-        <Ionicons name="download-outline" size={13} color={COLORS.text.muted} style={{ marginLeft: 10 }} />
+        <Ionicons name="download-outline" size={13} color={colors.text.muted} style={{ marginLeft: 10 }} />
         <Text style={styles.statText}>{paper.totalDownloads ?? 0}</Text>
         {downloaded && (
           <View style={styles.savedChip}>
-            <Ionicons name="checkmark-circle" size={13} color={COLORS.success} />
+            <Ionicons name="checkmark-circle" size={13} color={colors.success} />
             <Text style={styles.savedText}>Saved offline</Text>
           </View>
         )}
@@ -95,21 +99,21 @@ function PaperCardBase({
 
 export const PaperCard = memo(PaperCardBase);
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   card: { marginBottom: 14, padding: 18 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   badges: { flexDirection: 'row', gap: 8, alignItems: 'center', flex: 1 },
-  title: { fontSize: 15, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
-  meta: { fontSize: 12, color: COLORS.text.secondary, marginBottom: 10 },
+  title: { fontSize: 15, fontWeight: '700', color: c.text.primary, marginBottom: 4 },
+  meta: { fontSize: 12, color: c.text.secondary, marginBottom: 10 },
   stats: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 14 },
-  statText: { fontSize: 11, color: COLORS.text.muted, fontWeight: '600' },
+  statText: { fontSize: 11, color: c.text.muted, fontWeight: '600' },
   savedChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto',
-    backgroundColor: '#ecfdf5', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: c.successSoft, borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 3,
   },
-  savedText: { fontSize: 11, fontWeight: '700', color: '#047857' },
+  savedText: { fontSize: 11, fontWeight: '700', color: c.successText },
   progressWrap: { gap: 6 },
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: '#e2e8f0', overflow: 'hidden' },
-  progressFill: { height: 8, borderRadius: 4, backgroundColor: COLORS.primary },
-  progressText: { fontSize: 12, fontWeight: '600', color: COLORS.text.secondary, textAlign: 'center' },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: c.border, overflow: 'hidden' },
+  progressFill: { height: 8, borderRadius: 4, backgroundColor: c.primary },
+  progressText: { fontSize: 12, fontWeight: '600', color: c.text.secondary, textAlign: 'center' },
 });

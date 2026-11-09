@@ -3,16 +3,23 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import { Input } from '../../components/ui/Input';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { Card } from '../../components/ui/Card';
 import { UpdateModal } from '../../components/UpdateModal';
-import { COLORS, RADIUS, SHADOW, APP_VERSION, APP_VERSION_CODE } from '../../constants';
+import { RADIUS, SHADOW, APP_VERSION, APP_VERSION_CODE } from '../../constants';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 export default function ProfileScreen() {
+  const { colors, mode, setMode } = useTheme();
+  const toast = useToast();
+  const styles = useThemedStyles(createStyles);
   const { user, logout, refreshUser } = useAuth();
   const { updateAvailable, updateInfo, checking, checkForUpdate, dismissUpdate, openDownload } = useUpdateChecker();
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -30,7 +37,7 @@ export default function ProfileScreen() {
     if (updateAvailable && updateInfo) {
       setShowUpdateModal(true);
     } else {
-      Alert.alert('Up to date ✓', `You are on the latest version (${APP_VERSION}).`);
+      toast.show(`You're on the latest version (${APP_VERSION}).`, 'success');
     }
     setCheckedOnce(false);
   }, [checkedOnce, updateAvailable, updateInfo]);
@@ -54,30 +61,30 @@ export default function ProfileScreen() {
   const univName = universities.find((u) => u.id === user?.university)?.name || user?.university || '—';
 
   const handleSaveProfile = async () => {
-    if (!fullName.trim()) { Alert.alert('Error', 'Name cannot be empty.'); return; }
+    if (!fullName.trim()) { toast.show('Name cannot be empty.', 'error'); return; }
     setSaving(true);
     try {
       await api.auth.updateProfile({ fullName: fullName.trim() });
       await refreshUser();
-      Alert.alert('Saved', 'Profile updated successfully.');
+      toast.show('Profile updated', 'success');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update profile.');
+      toast.show(e.message || 'Failed to update profile.', 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleChangePassword = async () => {
-    if (!currentPw || !newPw || !confirmPw) { Alert.alert('Error', 'All password fields are required.'); return; }
-    if (newPw !== confirmPw) { Alert.alert('Error', 'New passwords do not match.'); return; }
-    if (newPw.length < 6) { Alert.alert('Error', 'Password must be at least 6 characters.'); return; }
+    if (!currentPw || !newPw || !confirmPw) { toast.show('All password fields are required.', 'error'); return; }
+    if (newPw !== confirmPw) { toast.show('New passwords do not match.', 'error'); return; }
+    if (newPw.length < 6) { toast.show('Password must be at least 6 characters.', 'error'); return; }
     setSavingPw(true);
     try {
       await api.auth.updateProfile({ currentPassword: currentPw, newPassword: newPw });
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-      Alert.alert('Done', 'Password changed successfully.');
+      toast.show('Password changed', 'success');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to change password.');
+      toast.show(e.message || 'Failed to change password.', 'error');
     } finally {
       setSavingPw(false);
     }
@@ -134,6 +141,28 @@ export default function ProfileScreen() {
           <GradientButton label={savingPw ? 'Updating…' : 'Update Password'} onPress={handleChangePassword} loading={savingPw} variant="ghost" />
         </Card>
 
+        {/* Appearance */}
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <View style={styles.segment}>
+            {([['system', 'phone-portrait-outline', 'System'], ['light', 'sunny-outline', 'Light'], ['dark', 'moon-outline', 'Dark']] as const).map(([key, icon, label]) => {
+              const active = mode === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.segmentItem, active && styles.segmentItemActive]}
+                  onPress={() => setMode(key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Ionicons name={icon} size={16} color={active ? '#fff' : colors.text.secondary} />
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Card>
+
         {/* App info + update check */}
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>App Information</Text>
@@ -143,8 +172,8 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Status</Text>
-            <Text style={[styles.infoValue, { color: updateAvailable ? COLORS.warning : COLORS.success }]}>
-              {updateAvailable ? '⬆ Update available' : '✓ Up to date'}
+            <Text style={[styles.infoValue, { color: updateAvailable ? colors.warning : colors.success }]}>
+              {updateAvailable ? 'Update available' : 'Up to date'}
             </Text>
           </View>
           <GradientButton
@@ -160,7 +189,7 @@ export default function ProfileScreen() {
               style={styles.updateNowBtn}
               onPress={() => setShowUpdateModal(true)}
             >
-              <Text style={styles.updateNowText}>🚀 Update Now — v{updateInfo?.latestVersion}</Text>
+              <Text style={styles.updateNowText}>Update now — v{updateInfo?.latestVersion}</Text>
             </TouchableOpacity>
           )}
         </Card>
@@ -191,12 +220,20 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (c: Palette) => StyleSheet.create({
+  segment: { flexDirection: 'row', backgroundColor: c.surfaceAlt, borderRadius: RADIUS.lg, padding: 4, gap: 4 },
+  segmentItem: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: RADIUS.md,
+  },
+  segmentItemActive: { backgroundColor: c.primary },
+  segmentText: { fontSize: 13, fontWeight: '700', color: c.text.secondary },
+  segmentTextActive: { color: '#fff' },
+  root: { flex: 1, backgroundColor: c.background },
   scroll: { padding: 20, paddingBottom: 48 },
   avatarCard: {
     flexDirection: 'row', alignItems: 'center', gap: 16,
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.xxl,
+    backgroundColor: c.primary, borderRadius: RADIUS.xxl,
     padding: 20, marginBottom: 20, ...SHADOW.lg,
   },
   avatar: {
@@ -212,21 +249,21 @@ const styles = StyleSheet.create({
   avatarYear: { color: '#a5b4fc', fontSize: 12, marginTop: 4 },
   section: { marginBottom: 16, padding: 20 },
   sectionTitle: {
-    fontSize: 15, fontWeight: '800', color: COLORS.text.primary,
+    fontSize: 15, fontWeight: '800', color: c.text.primary,
     marginBottom: 18, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    borderBottomWidth: 1, borderBottomColor: c.border,
   },
   readonlyField: { marginBottom: 16 },
-  roLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: COLORS.text.secondary, marginBottom: 6 },
-  roValue: { fontSize: 14, color: COLORS.text.muted, backgroundColor: '#f1f5f9', borderRadius: RADIUS.md, padding: 12 },
-  roHint: { fontSize: 11, color: COLORS.text.muted, marginTop: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  infoLabel: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '600' },
-  infoValue: { fontSize: 13, color: COLORS.text.primary, fontWeight: '700' },
+  roLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: c.text.secondary, marginBottom: 6 },
+  roValue: { fontSize: 14, color: c.text.muted, backgroundColor: c.surfaceAlt, borderRadius: RADIUS.md, padding: 12 },
+  roHint: { fontSize: 11, color: c.text.muted, marginTop: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: c.border },
+  infoLabel: { fontSize: 13, color: c.text.secondary, fontWeight: '600' },
+  infoValue: { fontSize: 13, color: c.text.primary, fontWeight: '700' },
   logoutBtn: { marginTop: 8 },
   updateNowBtn: {
     marginTop: 10,
-    backgroundColor: COLORS.primary,
+    backgroundColor: c.primary,
     borderRadius: RADIUS.xl,
     paddingVertical: 14,
     alignItems: 'center',

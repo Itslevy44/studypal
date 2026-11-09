@@ -7,6 +7,8 @@ import { COLORS } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
 import { UpdateBanner } from '../../components/UpdateBanner';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 const TAB_ICONS: Record<string, [string, string]> = {
   dashboard: ['home', 'home-outline'],
@@ -17,17 +19,20 @@ const TAB_ICONS: Record<string, [string, string]> = {
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
+  const { colors } = useTheme();
   const [on, off] = TAB_ICONS[name] ?? ['ellipse', 'ellipse-outline'];
   return (
     <Ionicons
       name={(focused ? on : off) as any}
       size={24}
-      color={focused ? COLORS.primary : COLORS.text.muted}
+      color={focused ? colors.primary : colors.text.muted}
     />
   );
 }
 
 export default function AppLayout() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, loading } = useAuth();
   const router = useRouter();
   const { updateAvailable, updateInfo, dismissUpdate, openDownload } = useUpdateChecker();
@@ -53,8 +58,8 @@ export default function AppLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: COLORS.primary,
-          tabBarInactiveTintColor: COLORS.text.muted,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.text.muted,
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
         }}
@@ -99,11 +104,11 @@ export default function AppLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   tabBar: {
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: c.border,
     height: 64,
     paddingBottom: 8,
     paddingTop: 6,

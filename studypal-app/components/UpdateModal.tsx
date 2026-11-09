@@ -2,8 +2,10 @@ import React from 'react';
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOW } from '../constants';
+import { RADIUS, SHADOW } from '../constants';
 import { UpdateInfo } from '../hooks/useUpdateChecker';
+import { useThemedStyles } from '../context/ThemeContext';
+import type { Palette } from '../constants/theme';
 
 interface Props {
   info: UpdateInfo;
@@ -12,6 +14,7 @@ interface Props {
 }
 
 export function UpdateModal({ info, onUpdate, onDismiss }: Props) {
+  const styles = useThemedStyles(createStyles);
   return (
     <Modal
       visible
@@ -61,7 +64,7 @@ export function UpdateModal({ info, onUpdate, onDismiss }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(2,6,23,0.7)',
@@ -72,7 +75,7 @@ const styles = StyleSheet.create({
   sheet: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderRadius: 28,
     padding: 28,
     alignItems: 'center',
@@ -82,7 +85,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: '#eef2ff',
+    backgroundColor: c.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -91,19 +94,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: COLORS.text.primary,
+    color: c.text.primary,
     marginBottom: 4,
   },
   version: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: c.primary,
     marginBottom: 16,
   },
   notes: {
     width: '100%',
     maxHeight: 140,
-    backgroundColor: '#f8fafc',
+    backgroundColor: c.background,
     borderRadius: RADIUS.lg,
     padding: 14,
     marginBottom: 20,
@@ -111,21 +114,21 @@ const styles = StyleSheet.create({
   notesLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.text.muted,
+    color: c.text.muted,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 6,
   },
   notesText: {
     fontSize: 13,
-    color: COLORS.text.secondary,
+    color: c.text.secondary,
     lineHeight: 20,
   },
   updateBtn: {
     width: '100%',
     height: 52,
     borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -142,12 +145,12 @@ const styles = StyleSheet.create({
   },
   laterText: {
     fontSize: 13,
-    color: COLORS.text.muted,
+    color: c.text.muted,
     fontWeight: '600',
   },
   mandatoryNote: {
     fontSize: 12,
-    color: COLORS.error,
+    color: c.error,
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '600',

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { COLORS, RADIUS, SHADOW } from '../../constants';
+import { RADIUS, SHADOW } from '../../constants';
+import { useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface Props {
   children: React.ReactNode;
@@ -9,6 +11,7 @@ interface Props {
 }
 
 export function Card({ children, style, elevated }: Props) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.card, elevated && SHADOW.md, style]}>
       {children}
@@ -16,12 +19,12 @@ export function Card({ children, style, elevated }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: c.surface,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     padding: 16,
   },
 });

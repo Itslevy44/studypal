@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { TextInput, View, Text, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
-import { COLORS, RADIUS } from '../../constants';
+import { RADIUS } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface Props extends TextInputProps {
   label: string;
@@ -9,6 +11,8 @@ interface Props extends TextInputProps {
 }
 
 export function Input({ label, error, secureToggle, style, ...props }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [show, setShow] = useState(false);
   const isSecure = props.secureTextEntry && !show;
 
@@ -20,7 +24,7 @@ export function Input({ label, error, secureToggle, style, ...props }: Props) {
           {...props}
           secureTextEntry={secureToggle ? isSecure : props.secureTextEntry}
           style={[styles.input, style]}
-          placeholderTextColor={COLORS.text.muted}
+          placeholderTextColor={colors.text.muted}
           autoCapitalize={props.autoCapitalize ?? 'none'}
         />
         {secureToggle && (
@@ -34,14 +38,14 @@ export function Input({ label, error, secureToggle, style, ...props }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   wrapper: { marginBottom: 16 },
   label: {
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: COLORS.text.secondary,
+    color: c.text.secondary,
     marginBottom: 8,
   },
   inputRow: {
@@ -49,19 +53,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderRadius: RADIUS.lg,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     paddingHorizontal: 14,
   },
-  inputNormal: { borderColor: '#c7d2fe' },  // indigo-200
-  inputError: { borderColor: COLORS.error },
+  inputNormal: { borderColor: c.inputBorder },  // indigo-200
+  inputError: { borderColor: c.error },
   input: {
     flex: 1,
     height: 50,
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.text.primary,
+    color: c.text.primary,
   },
   eye: { padding: 6 },
   eyeText: { fontSize: 16 },
-  error: { fontSize: 12, color: COLORS.error, marginTop: 4, fontWeight: '500' },
+  error: { fontSize: 12, color: c.error, marginTop: 4, fontWeight: '500' },
 });
