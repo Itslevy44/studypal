@@ -92,6 +92,7 @@ export default function AppLayout() {
             tabBarIcon: ({ focused }) => <TabIcon name="downloads" focused={focused} />,
           }}
         />
+        <Tabs.Screen name="study-tools" options={{ href: null }} />
         <Tabs.Screen
           name="profile"
           options={{

@@ -119,6 +119,25 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Study tools shortcuts */}
+        <View style={styles.toolsRow}>
+          {([
+            ['timer', 'timer-outline', 'Focus timer'],
+            ['exams', 'calendar-outline', 'Exam countdown'],
+            ['gpa', 'calculator-outline', 'GPA calc'],
+          ] as const).map(([tab, icon, label]) => (
+            <TouchableOpacity
+              key={tab}
+              style={styles.toolTile}
+              activeOpacity={0.8}
+              onPress={() => router.push({ pathname: '/(app)/study-tools', params: { tab } })}
+            >
+              <View style={styles.toolIcon}><Ionicons name={icon} size={20} color={colors.primary} /></View>
+              <Text style={styles.toolLabel} numberOfLines={1}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Subscription expiry banner */}
         {subscriptionInfo && (() => {
           const daysLeft = Math.ceil((new Date(subscriptionInfo.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -192,6 +211,13 @@ export default function DashboardScreen() {
 }
 
 const createStyles = (c: Palette) => StyleSheet.create({
+  toolsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  toolTile: {
+    flex: 1, alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 6,
+    backgroundColor: c.surface, borderRadius: RADIUS.xl, borderWidth: 1, borderColor: c.border,
+  },
+  toolIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  toolLabel: { fontSize: 11, fontWeight: '700', color: c.text.primary },
   root: { flex: 1, backgroundColor: c.background },
   scroll: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
