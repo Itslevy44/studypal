@@ -92,9 +92,9 @@ export default function RegisterScreen() {
           <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
         ) : null}
 
-        <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Jane Doe" autoCapitalize="words" />
-        <Input label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@university.ac.ke" />
-        <Input label="Phone Number (M-Pesa)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 0712345678" />
+        <Input label="Full Name" icon="person-outline" value={fullName} onChangeText={setFullName} placeholder="Jane Doe" autoCapitalize="words" />
+        <Input label="Email Address" icon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@university.ac.ke" />
+        <Input label="Phone Number (M-Pesa)" icon="call-outline" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 0712345678" />
 
         {/* University picker */}
         <Text style={styles.label}>University</Text>
@@ -122,8 +122,8 @@ export default function RegisterScreen() {
           </Picker>
         </View>
 
-        <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry secureToggle placeholder="Min 6 characters" />
-        <Input label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry secureToggle placeholder="Repeat password" />
+        <Input label="Password" icon="lock-closed-outline" value={password} onChangeText={setPassword} secureTextEntry secureToggle placeholder="Min 6 characters" />
+        <Input label="Confirm Password" icon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry secureToggle placeholder="Repeat password" />
 
         <GradientButton label="Create Account" onPress={handleRegister} loading={loading} style={styles.btn} />
 

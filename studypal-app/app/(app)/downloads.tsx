@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
   RefreshControl, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +21,10 @@ interface DownloadedPaper {
   yearOfStudy: string;
   fileUri: string;
   savedAt: string;
+  size: number;
 }
+
+const formatSize = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
   try {
@@ -37,6 +40,11 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
         const raw = await FileSystem.readAsStringAsync(metaPath);
         meta = JSON.parse(raw);
       } catch { /* no metadata */ }
+      let size = 0;
+      try {
+        const info = await FileSystem.getInfoAsync(`${dir}${f}`);
+        if (info.exists && 'size' in info) size = info.size ?? 0;
+      } catch { /* ignore */ }
       results.push({
         id,
         title: meta.title || id,
@@ -45,9 +53,10 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
         yearOfStudy: meta.yearOfStudy || '—',
         fileUri: `${dir}${f}`,
         savedAt: meta.savedAt || new Date().toISOString(),
+        size,
       });
     }
-    return results;
+    return results.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   } catch { return []; }
 }
 
@@ -155,6 +164,7 @@ export default function DownloadsScreen() {
   const [viewing, setViewing] = useState<DownloadedPaper | null>(null);
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     const list = await listDownloadedPapers();
@@ -164,6 +174,12 @@ export default function DownloadsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const totalSize = useMemo(() => papers.reduce((n, p) => n + (p.size || 0), 0), [papers]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? papers.filter((p) => `${p.course} ${p.title}`.toLowerCase().includes(q)) : papers;
+  }, [papers, query]);
 
   const openPaper = async (paper: DownloadedPaper) => {
     setPdfLoading(true);
@@ -257,12 +273,35 @@ export default function DownloadsScreen() {
         </View>
       ) : (
         <FlatList
-          data={papers}
+          data={filtered}
           keyExtractor={(p) => p.id}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View style={styles.header}>
               <Text style={styles.pageTitle}>Offline Downloads</Text>
-              <Text style={styles.pageSub}>Papers saved to your device</Text>
+              <Text style={styles.pageSub}>
+                {papers.length === 0
+                  ? 'Papers saved to your device'
+                  : `${papers.length} paper${papers.length === 1 ? '' : 's'} · ${formatSize(totalSize)} on this device`}
+              </Text>
+              {papers.length > 3 && (
+                <View style={styles.searchBox}>
+                  <Ionicons name="search" size={18} color={colors.text.muted} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search saved papers"
+                    placeholderTextColor={colors.text.muted}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCorrect={false}
+                  />
+                  {query ? (
+                    <TouchableOpacity onPress={() => setQuery('')} hitSlop={10}>
+                      <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
             </View>
           }
           renderItem={({ item }) => (
@@ -275,8 +314,9 @@ export default function DownloadsScreen() {
               </View>
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardMeta}>
-                {item.examPeriod !== '—' ? `${item.examPeriod} • ` : ''}
-                {item.yearOfStudy !== '—' ? `Year ${item.yearOfStudy}` : ''}
+                {[item.examPeriod !== '—' ? item.examPeriod : '', item.yearOfStudy !== '—' ? item.yearOfStudy : '', item.size ? formatSize(item.size) : '']
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
               <View style={styles.cardActions}>
                 <TouchableOpacity
@@ -297,10 +337,12 @@ export default function DownloadsScreen() {
           )}
           ListEmptyComponent={
             <Card style={styles.empty}>
-              <Ionicons name="cloud-offline-outline" size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
-              <Text style={styles.emptyTitle}>No Downloads Yet</Text>
+              <Ionicons name={papers.length ? 'search-outline' : 'cloud-offline-outline'} size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
+              <Text style={styles.emptyTitle}>{papers.length ? 'No matches' : 'No Downloads Yet'}</Text>
               <Text style={styles.emptySub}>
-                Papers you download from the Papers tab will appear here for offline study.
+                {papers.length
+                  ? 'Try a different course name.'
+                  : 'Papers you download from the Papers tab will appear here for offline study.'}
               </Text>
             </Card>
           }
@@ -324,6 +366,11 @@ const createStyles = (c: Palette) => StyleSheet.create({
   list: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { marginBottom: 20 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14,
+    backgroundColor: c.surface, borderRadius: RADIUS.xl, borderWidth: 1, borderColor: c.border, paddingHorizontal: 14,
+  },
+  searchInput: { flex: 1, height: 46, fontSize: 14, fontWeight: '500', color: c.text.primary },
   pageTitle: { fontSize: 26, fontWeight: '800', color: c.text.primary },
   pageSub: { fontSize: 13, color: c.text.secondary, marginTop: 2 },
   card: { marginBottom: 14, padding: 18 },

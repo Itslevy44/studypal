@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { TextInput, View, Text, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
 import { RADIUS } from '../../constants';
@@ -9,20 +9,29 @@ interface Props extends TextInputProps {
   label: string;
   error?: string;
   secureToggle?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
 }
 
-export function Input({ label, error, secureToggle, style, ...props }: Props) {
+export const Input = forwardRef<TextInput, Props>(function Input(
+  { label, error, secureToggle, icon, style, onFocus, onBlur, ...props },
+  ref
+) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isSecure = props.secureTextEntry && !show;
 
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputRow, error ? styles.inputError : styles.inputNormal]}>
+      <View style={[styles.inputRow, error ? styles.inputError : focused ? styles.inputFocused : styles.inputNormal]}>
+        {icon && <Ionicons name={icon} size={18} color={focused ? colors.primary : colors.text.muted} style={styles.leading} />}
         <TextInput
+          ref={ref}
           {...props}
+          onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+          onBlur={(e) => { setFocused(false); onBlur?.(e); }}
           secureTextEntry={secureToggle ? isSecure : props.secureTextEntry}
           style={[styles.input, style]}
           placeholderTextColor={colors.text.muted}
@@ -37,7 +46,7 @@ export function Input({ label, error, secureToggle, style, ...props }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
-}
+});
 
 const createStyles = (c: Palette) => StyleSheet.create({
   wrapper: { marginBottom: 16 },
@@ -58,7 +67,9 @@ const createStyles = (c: Palette) => StyleSheet.create({
     paddingHorizontal: 14,
   },
   inputNormal: { borderColor: c.inputBorder },  // indigo-200
+  inputFocused: { borderColor: c.primary },
   inputError: { borderColor: c.error },
+  leading: { marginRight: 10 },
   input: {
     flex: 1,
     height: 50,
