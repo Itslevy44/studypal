@@ -1,20 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, ActivityIndicator, Alert,
+  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
-import { storage } from '../../lib/storage';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { GradientButton } from '../../components/ui/GradientButton';
+import { PaperCardSkeleton } from '../../components/ui/Skeleton';
+import { PaperCard } from '../../components/PaperCard';
+import { usePaperActions } from '../../hooks/usePaperActions';
+import { Ionicons } from '@expo/vector-icons';
 import { MpesaModal } from '../../components/MpesaModal';
 import { COLORS, RADIUS, SHADOW } from '../../constants';
-import * as FileSystem from 'expo-file-system';
-import * as IntentLauncher from 'expo-intent-launcher';
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
 
 export default function DashboardScreen() {
   const { user, refreshUser, logout } = useAuth();
@@ -27,7 +30,7 @@ export default function DashboardScreen() {
   const [subscriptionInfo, setSubscriptionInfo] = useState<{ expiryDate: string; isTrial: boolean } | null>(null);
 
   const [mpesaTarget, setMpesaTarget] = useState<any | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const actions = usePaperActions();
 
   // Refresh user once on mount only — not inside loadData to avoid re-render loop
   useEffect(() => { refreshUser(); }, []);
@@ -66,46 +69,13 @@ export default function DashboardScreen() {
 
   const hasAccess = (paper: any) => paper.cost === 0 || !!(user as any)?.hasActiveSubscription;
 
-  const handleDownload = async (paper: any) => {
-    setDownloadingId(paper.id);
-    try {
-      const token = await storage.getToken();
-      const url = api.papers.downloadUrl(paper.id);
-      const dest = `${FileSystem.documentDirectory}${paper.id}.pdf`;
-      const result = await FileSystem.downloadAsync(url, dest, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (result.status === 200) {
-        // Save metadata so the offline screen shows the correct name
-        const meta = {
-          id: paper.id,
-          title: paper.title || paper.course,
-          course: paper.course,
-          examPeriod: paper.examPeriod || '',
-          yearOfStudy: paper.yearOfStudy || '',
-          savedAt: new Date().toISOString(),
-        };
-        await FileSystem.writeAsStringAsync(
-          `${FileSystem.documentDirectory}${paper.id}.meta.json`,
-          JSON.stringify(meta)
-        );
-        Alert.alert('Downloaded!', `"${paper.title || paper.course}" saved to your device.`);
-      } else {
-        Alert.alert('Error', 'Failed to download paper.');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Download failed.');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
   if (loading) {
     return (
-      <SafeAreaView style={styles.root}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading your portal…</Text>
+      <SafeAreaView style={styles.root} edges={['top']}>
+        <View style={styles.scroll}>
+          <View style={[styles.banner, { opacity: 0.6, height: 118 }]} />
+          <PaperCardSkeleton />
+          <PaperCardSkeleton />
         </View>
       </SafeAreaView>
     );
@@ -121,8 +91,8 @@ export default function DashboardScreen() {
         {/* Welcome Banner */}
         <View style={styles.banner}>
           <View style={styles.bannerText}>
-            <Text style={styles.bannerLabel}>Welcome back</Text>
-            <Text style={styles.bannerName}>{user?.fullName?.split(' ')[0]} 👋</Text>
+            <Text style={styles.bannerLabel}>{greeting()}</Text>
+            <Text style={styles.bannerName}>{user?.fullName?.split(' ')[0]}</Text>
             <Text style={styles.bannerSub}>
               Materials from <Text style={{ color: '#fff', fontWeight: '700' }}>{universityName}</Text>
             </Text>
@@ -175,52 +145,30 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Available Papers</Text>
           <TouchableOpacity onPress={() => router.push('/(app)/papers')}>
-            <Text style={styles.viewAll}>View all →</Text>
+            <Text style={styles.viewAll}>View all</Text>
           </TouchableOpacity>
         </View>
 
         {papers.length === 0 ? (
           <Card style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>📭</Text>
+            <Ionicons name="document-text-outline" size={44} color={COLORS.text.muted} />
             <Text style={styles.emptyTitle}>No Papers Yet</Text>
             <Text style={styles.emptyText}>No papers are available for your university yet.</Text>
           </Card>
         ) : (
-          papers.map((paper) => {
-            const free = paper.cost === 0;
-            const accessible = hasAccess(paper);
-            const isDl = downloadingId === paper.id;
-            return (
-              <Card key={paper.id} style={styles.paperCard} elevated>
-                <View style={styles.paperTop}>
-                  <Badge label={paper.course} />
-                  {free
-                    ? <Badge label="FREE" color="#059669" bg="#d1fae5" />
-                    : <Badge label="PAID" color="#7c3aed" bg="#ede9fe" />}
-                </View>
-                <Text style={styles.paperTitle} numberOfLines={2}>{paper.title}</Text>
-                <Text style={styles.paperMeta}>{paper.examPeriod} • {paper.yearOfStudy}</Text>
-
-                {accessible ? (
-                  <GradientButton
-                    label={isDl ? 'Downloading…' : free ? 'Download Free' : 'Download'}
-                    variant="success"
-                    loading={isDl}
-                    onPress={() => handleDownload(paper)}
-                    small
-                    style={styles.paperBtn}
-                  />
-                ) : (
-                  <GradientButton
-                    label="Unlock All — KES 100"
-                    onPress={() => setMpesaTarget(paper)}
-                    small
-                    style={styles.paperBtn}
-                  />
-                )}
-              </Card>
-            );
-          })
+          papers.map((paper) => (
+            <PaperCard
+              key={paper.id}
+              paper={paper}
+              accessible={hasAccess(paper)}
+              bookmarked={actions.isBookmarked(paper.id)}
+              downloaded={actions.isDownloaded(paper.id)}
+              progress={actions.progressOf(paper.id)}
+              onDownload={actions.download}
+              onUnlock={setMpesaTarget}
+              onToggleBookmark={actions.toggleBookmark}
+            />
+          ))
         )}
       </ScrollView>
 

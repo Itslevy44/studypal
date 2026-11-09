@@ -3,7 +3,10 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenCapture from 'expo-screen-capture';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/AuthContext';
+import { ToastProvider } from '../context/ToastContext';
+import { BookmarksProvider } from '../context/BookmarksContext';
 import { UpdateModal } from '../components/UpdateModal';
 import { useUpdateChecker } from '../lib/useUpdateChecker';
 import { COLORS } from '../constants';
@@ -43,9 +46,15 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" backgroundColor={COLORS.dark} />
-      <AppWithUpdateChecker />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <BookmarksProvider>
+          <ToastProvider>
+            <StatusBar style="light" backgroundColor={COLORS.dark} />
+            <AppWithUpdateChecker />
+          </ToastProvider>
+        </BookmarksProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

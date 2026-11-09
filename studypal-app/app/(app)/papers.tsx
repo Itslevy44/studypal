@@ -1,40 +1,58 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, ActivityIndicator, Alert,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
+  RefreshControl, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
-import { storage } from '../../lib/storage';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { GradientButton } from '../../components/ui/GradientButton';
+import { PaperCardSkeleton } from '../../components/ui/Skeleton';
+import { PaperCard } from '../../components/PaperCard';
 import { MpesaModal } from '../../components/MpesaModal';
+import { usePaperActions } from '../../hooks/usePaperActions';
 import { COLORS, RADIUS, SHADOW } from '../../constants';
-import * as FileSystem from 'expo-file-system';
 
 const YEARS = ['', 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5'];
+type Sort = 'newest' | 'popular' | 'course';
+const SORTS: { key: Sort; label: string }[] = [
+  { key: 'newest', label: 'Newest' },
+  { key: 'popular', label: 'Most downloaded' },
+  { key: 'course', label: 'Course A–Z' },
+];
 
 export default function PapersScreen() {
   const { user, refreshUser } = useAuth();
+  const actions = usePaperActions();
+
   const [papers, setPapers] = useState<any[]>([]);
   const [universities, setUniversities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchCourse, setSearchCourse] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [year, setYear] = useState('');
+  const [sort, setSort] = useState<Sort>('newest');
+  const [savedOnly, setSavedOnly] = useState(false);
   const [mpesaTarget, setMpesaTarget] = useState<any | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const firstRun = useRef(true);
 
-  const universityName = (id: string) =>
-    id === 'all' ? 'General (All Universities)' : (universities.find((u) => u.id === id)?.name || id);
+  const universityName = useCallback((id: string) =>
+    id === 'all' ? 'General' : (universities.find((u) => u.id === id)?.name || id),
+  [universities]);
 
-  const loadPapers = useCallback(async (course = searchCourse, year = selectedYear) => {
+  // Debounce the search box so we don't hit the API on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 350);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const load = useCallback(async () => {
     try {
       const data = await api.papers.list({
         university: user?.university,
-        course: course || undefined,
+        course: debouncedQuery || undefined,
         year: year || undefined,
       });
       setPapers(data.papers || []);
@@ -44,183 +62,128 @@ export default function PapersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user?.university, searchCourse, selectedYear]);
+  }, [user?.university, debouncedQuery, year]);
 
   useEffect(() => {
     api.universities.list().then((d) => setUniversities(d.universities || [])).catch(() => {});
-    loadPapers();
   }, []);
 
-  const onRefresh = () => { setRefreshing(true); loadPapers(); };
+  useEffect(() => {
+    if (!firstRun.current) setLoading(true);
+    firstRun.current = false;
+    load();
+  }, [load]);
 
   const hasAccess = (p: any) => p.cost === 0 || !!(user as any)?.hasActiveSubscription;
 
-  // Split papers into general (all universities) and institution-specific
-  const generalPapers = papers.filter((p) => p.university === 'all');
-  const myPapers = papers.filter((p) => p.university !== 'all');
+  const visible = useMemo(() => {
+    let list = savedOnly ? papers.filter((p) => actions.isBookmarked(p.id)) : [...papers];
+    list.sort((a, b) => {
+      if (sort === 'popular') return (b.totalDownloads ?? 0) - (a.totalDownloads ?? 0);
+      if (sort === 'course') return String(a.course).localeCompare(String(b.course));
+      return new Date(b.uploadedAt ?? 0).getTime() - new Date(a.uploadedAt ?? 0).getTime();
+    });
+    return list;
+  }, [papers, savedOnly, sort, actions.isBookmarked]);
 
-  const handleDownload = async (paper: any) => {
-    setDownloadingId(paper.id);
-    try {
-      const token = await storage.getToken();
-      const dest = `${FileSystem.documentDirectory}${paper.id}.pdf`;
-      const result = await FileSystem.downloadAsync(
-        api.papers.downloadUrl(paper.id), dest,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (result.status === 200) {
-        // Save metadata alongside the PDF so the downloads screen can show proper names
-        const meta = {
-          id: paper.id,
-          title: paper.title || paper.course,
-          course: paper.course,
-          examPeriod: paper.examPeriod || '',
-          yearOfStudy: paper.yearOfStudy || '',
-          savedAt: new Date().toISOString(),
-        };
-        await FileSystem.writeAsStringAsync(
-          `${FileSystem.documentDirectory}${paper.id}.meta.json`,
-          JSON.stringify(meta)
-        );
-        Alert.alert('Downloaded!', `"${paper.title || paper.course}" saved to your device.`);
-      } else {
-        Alert.alert('Error', 'Failed to download paper.');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Download failed.');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  const renderItem = ({ item }: { item: any }) => (
+    <PaperCard
+      paper={item}
+      subtitle={item.university === 'all' ? 'General · all universities' : undefined}
+      accessible={hasAccess(item)}
+      bookmarked={actions.isBookmarked(item.id)}
+      downloaded={actions.isDownloaded(item.id)}
+      progress={actions.progressOf(item.id)}
+      onDownload={actions.download}
+      onUnlock={setMpesaTarget}
+      onToggleBookmark={actions.toggleBookmark}
+    />
+  );
 
-  const renderHeader = () => (
-    <>
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Browse Past Papers</Text>
-        <Text style={styles.pageSub}>{universityName(user?.university ?? '')}</Text>
-      </View>
+  const header = (
+    <View>
+      <Text style={styles.pageTitle}>Past Papers</Text>
+      <Text style={styles.pageSub}>{universityName(user?.university ?? '')}</Text>
 
-      {/* Search */}
-      <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>🔍</Text>
+      <View style={[styles.searchBox, SHADOW.sm]}>
+        <Ionicons name="search" size={18} color={COLORS.text.muted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by course, e.g. MATH 101"
           placeholderTextColor={COLORS.text.muted}
-          value={searchCourse}
-          onChangeText={setSearchCourse}
-          onSubmitEditing={() => loadPapers(searchCourse, selectedYear)}
+          value={query}
+          onChangeText={setQuery}
           returnKeyType="search"
+          autoCorrect={false}
         />
-        {searchCourse ? (
-          <TouchableOpacity onPress={() => { setSearchCourse(''); loadPapers('', selectedYear); }}>
-            <Text style={{ color: COLORS.text.muted, fontSize: 16, paddingHorizontal: 8 }}>✕</Text>
+        {query ? (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={10}>
+            <Ionicons name="close-circle" size={18} color={COLORS.text.muted} />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Year filter pills */}
-      <View style={styles.pills}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+        <TouchableOpacity
+          style={[styles.pill, savedOnly && styles.pillSaved]}
+          onPress={() => setSavedOnly((s) => !s)}
+        >
+          <Ionicons name={savedOnly ? 'bookmark' : 'bookmark-outline'} size={13}
+            color={savedOnly ? '#fff' : COLORS.text.secondary} />
+          <Text style={[styles.pillText, savedOnly && styles.pillTextActive]}>Saved</Text>
+        </TouchableOpacity>
         {YEARS.map((y) => (
           <TouchableOpacity
             key={y || 'all'}
-            style={[styles.pill, selectedYear === y && styles.pillActive]}
-            onPress={() => { setSelectedYear(y); loadPapers(searchCourse, y); }}
+            style={[styles.pill, year === y && styles.pillActive]}
+            onPress={() => setYear(y)}
           >
-            <Text style={[styles.pillText, selectedYear === y && styles.pillTextActive]}>
-              {y || 'All Years'}
-            </Text>
+            <Text style={[styles.pillText, year === y && styles.pillTextActive]}>{y || 'All years'}</Text>
           </TouchableOpacity>
         ))}
+      </ScrollView>
+
+      <View style={styles.sortRow}>
+        <Text style={styles.count}>{loading ? ' ' : `${visible.length} paper${visible.length === 1 ? '' : 's'}`}</Text>
+        <TouchableOpacity
+          style={styles.sortBtn}
+          onPress={() => setSort((s) => SORTS[(SORTS.findIndex((x) => x.key === s) + 1) % SORTS.length].key)}
+        >
+          <Ionicons name="swap-vertical" size={14} color={COLORS.primary} />
+          <Text style={styles.sortText}>{SORTS.find((s) => s.key === sort)!.label}</Text>
+        </TouchableOpacity>
       </View>
-
-      {/* General papers section */}
-      {generalPapers.length > 0 && (
-        <View style={styles.generalSection}>
-          <View style={styles.generalHeader}>
-            <Text style={styles.generalTitle}>📌 General Papers</Text>
-            <Text style={styles.generalSub}>Available to all students</Text>
-          </View>
-          {generalPapers.map((paper) => renderPaperCard(paper))}
-          <View style={styles.divider} />
-        </View>
-      )}
-
-      {/* My university section header */}
-      {myPapers.length > 0 && (
-        <Text style={styles.sectionLabel}>
-          🏫 {universityName(user?.university ?? '')} Papers
-        </Text>
-      )}
-    </>
+    </View>
   );
-
-  const renderPaperCard = (paper: any) => {
-    const free = paper.cost === 0;
-    const accessible = hasAccess(paper);
-    const isDl = downloadingId === paper.id;
-    return (
-      <Card key={paper.id} style={styles.card} elevated>
-        <View style={styles.cardTop}>
-          <Badge label={paper.course} />
-          {free
-            ? <Badge label="FREE" color="#059669" bg="#d1fae5" />
-            : <Badge label="Subscription" color="#7c3aed" bg="#ede9fe" />}
-        </View>
-        <Text style={styles.cardTitle} numberOfLines={2}>{paper.title}</Text>
-        <Text style={styles.cardMeta}>
-          {universityName(paper.university)} • {paper.examPeriod} • {paper.yearOfStudy}
-        </Text>
-        <View style={styles.cardMeta2}>
-          <Text style={styles.metaSmall}>{paper.fileSize}</Text>
-          <Text style={styles.metaSmall}>•</Text>
-          <Text style={styles.metaSmall}>{paper.totalDownloads} downloads</Text>
-        </View>
-        {accessible ? (
-          <GradientButton
-            label={isDl ? 'Downloading…' : free ? 'Download Free' : 'Download'}
-            variant="success"
-            loading={isDl}
-            onPress={() => handleDownload(paper)}
-            small style={styles.cardBtn}
-          />
-        ) : (
-          <GradientButton
-            label="Unlock All Papers — KES 100 / 3 months"
-            onPress={() => setMpesaTarget(paper)}
-            small style={styles.cardBtn}
-          />
-        )}
-      </Card>
-    );
-  };
-
-  const renderItem = ({ item: paper }: { item: any }) => renderPaperCard(paper);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={myPapers}
-          keyExtractor={(p) => p.id}
-          renderItem={renderItem}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={
-            <Card style={styles.emptyCard}>
-              <Text style={styles.emptyEmoji}>📭</Text>
-              <Text style={styles.emptyTitle}>No Papers Found</Text>
-              <Text style={styles.emptySub}>Try changing your filters or search term.</Text>
+      <FlatList
+        data={loading ? [] : visible}
+        keyExtractor={(p) => p.id}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          loading ? (
+            <View><PaperCardSkeleton /><PaperCardSkeleton /><PaperCardSkeleton /></View>
+          ) : (
+            <Card style={styles.empty}>
+              <Ionicons name={savedOnly ? 'bookmark-outline' : 'document-text-outline'} size={44} color={COLORS.text.muted} />
+              <Text style={styles.emptyTitle}>{savedOnly ? 'No saved papers' : 'No papers found'}</Text>
+              <Text style={styles.emptySub}>
+                {savedOnly ? 'Tap the bookmark on a paper to keep it here.' : 'Try a different course or year.'}
+              </Text>
             </Card>
-          }
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+          )
+        }
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} tintColor={COLORS.primary}
+            onRefresh={() => { setRefreshing(true); load(); actions.refreshDownloaded(); }} />
+        }
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
 
       <MpesaModal
         visible={!!mpesaTarget}
@@ -239,41 +202,28 @@ export default function PapersScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
   list: { padding: 20, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pageHeader: { marginBottom: 16 },
-  pageTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text.primary },
-  pageSub: { fontSize: 13, color: COLORS.text.secondary, marginTop: 2 },
+  pageTitle: { fontSize: 28, fontWeight: '800', color: COLORS.text.primary },
+  pageSub: { fontSize: 13, color: COLORS.text.secondary, marginTop: 2, marginBottom: 16 },
   searchBox: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: RADIUS.xl,
-    borderWidth: 2, borderColor: '#c7d2fe',
-    paddingHorizontal: 14, marginBottom: 14, ...SHADOW.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff',
+    borderRadius: RADIUS.xl, borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: 14, marginBottom: 14,
   },
-  searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: { flex: 1, height: 48, fontSize: 14, fontWeight: '500', color: COLORS.text.primary },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  pills: { gap: 8, paddingBottom: 4 },
   pill: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: RADIUS.full, backgroundColor: '#f1f5f9',
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: '#eef2f7',
   },
   pillActive: { backgroundColor: COLORS.primary },
+  pillSaved: { backgroundColor: COLORS.secondary },
   pillText: { fontSize: 12, fontWeight: '700', color: COLORS.text.secondary },
   pillTextActive: { color: '#fff' },
-  card: { marginBottom: 14, padding: 18 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
-  cardMeta: { fontSize: 12, color: COLORS.text.secondary, marginBottom: 4 },
-  cardMeta2: { flexDirection: 'row', gap: 6, marginBottom: 14 },
-  metaSmall: { fontSize: 11, color: COLORS.text.muted },
-  cardBtn: { width: '100%' },
-  generalSection: { marginBottom: 8 },
-  generalHeader: { marginBottom: 12 },
-  generalTitle: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
-  generalSub: { fontSize: 12, color: COLORS.text.secondary, marginTop: 2 },
-  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 20 },
-  sectionLabel: { fontSize: 15, fontWeight: '800', color: COLORS.text.primary, marginBottom: 12 },
-  emptyCard: { alignItems: 'center', padding: 36, marginTop: 20 },
-  emptyEmoji: { fontSize: 40, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
+  sortRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 14 },
+  count: { fontSize: 12, fontWeight: '600', color: COLORS.text.muted },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sortText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  empty: { alignItems: 'center', padding: 36, marginTop: 8, gap: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text.primary },
   emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },
 });

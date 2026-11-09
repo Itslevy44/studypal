@@ -1,22 +1,29 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
 import { UpdateBanner } from '../../components/UpdateBanner';
 
+const TAB_ICONS: Record<string, [string, string]> = {
+  dashboard: ['home', 'home-outline'],
+  papers: ['library', 'library-outline'],
+  marketplace: ['storefront', 'storefront-outline'],
+  downloads: ['cloud-download', 'cloud-download-outline'],
+  profile: ['person', 'person-outline'],
+};
+
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    dashboard: '🏠',
-    papers: '📚',
-    marketplace: '🛍️',
-    downloads: '📥',
-    profile: '👤',
-  };
+  const [on, off] = TAB_ICONS[name] ?? ['ellipse', 'ellipse-outline'];
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{icons[name] ?? '●'}</Text>
+    <Ionicons
+      name={(focused ? on : off) as any}
+      size={24}
+      color={focused ? COLORS.primary : COLORS.text.muted}
+    />
   );
 }
 
