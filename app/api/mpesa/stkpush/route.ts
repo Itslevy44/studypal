@@ -38,6 +38,12 @@ export async function POST(req: Request) {
     const paymentDesc = isItem ? (transactionDesc || 'Marketplace Item') : 'StudyPal: 3-Month All-Access Pass';
     const paymentRef = isItem ? (accountReference || 'item') : 'all_access';
 
+    // Optional shared secret so only Safaricom (who is given this URL) can hit the callback
+    const baseCallback = process.env.MPESA_CALLBACK_URL || 'https://mydomain.com/api/mpesa/callback';
+    const callbackUrl = process.env.MPESA_CALLBACK_SECRET
+      ? `${baseCallback}${baseCallback.includes('?') ? '&' : '?'}secret=${encodeURIComponent(process.env.MPESA_CALLBACK_SECRET)}`
+      : baseCallback;
+
     const payload = {
       BusinessShortCode: shortcode,
       Password: password,
@@ -47,7 +53,7 @@ export async function POST(req: Request) {
       PartyA: formattedPhone,
       PartyB: shortcode,
       PhoneNumber: formattedPhone,
-      CallBackURL: process.env.MPESA_CALLBACK_URL || 'https://mydomain.com/api/mpesa/callback',
+      CallBackURL: callbackUrl,
       AccountReference: paymentRef,
       TransactionDesc: paymentDesc,
     };

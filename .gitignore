@@ -44,3 +44,6 @@ next-env.d.ts
 .expo/
 /app.json
 /google42d4598fe1c93dcd.html
+
+# keep the template (contains no secrets)
+!.env.example
