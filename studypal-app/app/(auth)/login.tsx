@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Image,
+  KeyboardAvoidingView, Platform, TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { RADIUS } from '../../constants';
-import { useThemedStyles } from '../../context/ThemeContext';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
 import type { Palette } from '../../constants/theme';
 
 export default function LoginScreen() {
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const passwordRef = useRef<TextInput>(null);
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -65,6 +68,7 @@ export default function LoginScreen() {
 
         {error ? (
           <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -76,6 +80,10 @@ export default function LoginScreen() {
           keyboardType="email-address"
           placeholder="you@university.ac.ke"
           autoComplete="email"
+          icon="mail-outline"
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
         />
 
         <Input
@@ -85,6 +93,10 @@ export default function LoginScreen() {
           secureTextEntry
           secureToggle
           placeholder="••••••••"
+          icon="lock-closed-outline"
+          ref={passwordRef}
+          returnKeyType="go"
+          onSubmitEditing={handleLogin}
         />
 
         <GradientButton
@@ -127,8 +139,9 @@ const createStyles = (c: Palette) => StyleSheet.create({
     backgroundColor: c.errorSoft, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: c.errorBorder,
     padding: 14, marginBottom: 18,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  errorText: { color: c.error, fontSize: 13, fontWeight: '600' },
+  errorText: { flex: 1, color: c.error, fontSize: 13, fontWeight: '600' },
   btn: { marginTop: 8, marginBottom: 20 },
   linkRow: { alignItems: 'center' },
   linkText: { fontSize: 14, color: c.text.secondary },

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from 'expo-router';
 import { useBookmarks } from '../context/BookmarksContext';
 import { useToast } from '../context/ToastContext';
 import { downloadPaper, listDownloadedIds } from '../lib/downloads';
@@ -11,7 +12,8 @@ export function usePaperActions() {
   const [progress, setProgress] = useState<Record<string, number>>({});
 
   const refreshDownloaded = useCallback(async () => setDownloaded(await listDownloadedIds()), []);
-  useEffect(() => { refreshDownloaded(); }, [refreshDownloaded]);
+  // Re-check on every focus so deleting from the Offline tab updates the 'Saved offline' chips
+  useFocusEffect(useCallback(() => { refreshDownloaded(); }, [refreshDownloaded]));
 
   const download = useCallback(async (paper: any) => {
     setProgress((p) => ({ ...p, [paper.id]: 0 }));
