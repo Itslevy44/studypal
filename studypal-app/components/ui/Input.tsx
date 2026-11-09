@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { TextInput, View, Text, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
 import { RADIUS } from '../../constants';
 import { useTheme, useThemedStyles } from '../../context/ThemeContext';
@@ -29,7 +30,7 @@ export function Input({ label, error, secureToggle, style, ...props }: Props) {
         />
         {secureToggle && (
           <TouchableOpacity onPress={() => setShow((s) => !s)} style={styles.eye}>
-            <Text style={styles.eyeText}>{show ? '🙈' : '👁️'}</Text>
+            <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.text.muted} />
           </TouchableOpacity>
         )}
       </View>

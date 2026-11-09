@@ -1,10 +1,11 @@
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, Linking,
 } from 'react-native';
 import { RADIUS, SHADOW } from '../constants';
 import { UpdateInfo } from '../lib/useUpdateChecker';
-import { useThemedStyles } from '../context/ThemeContext';
+import { useTheme, useThemedStyles } from '../context/ThemeContext';
 import type { Palette } from '../constants/theme';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   if (!info) return null;
 
@@ -29,7 +31,7 @@ export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
         <View style={styles.sheet}>
           {/* Header */}
           <View style={styles.iconWrap}>
-            <Text style={styles.icon}>🚀</Text>
+            <Ionicons name="rocket-outline" size={28} color={colors.premiumText} />
           </View>
 
           <Text style={styles.title}>Update Available</Text>
@@ -50,7 +52,7 @@ export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
           {info.mandatory && (
             <View style={styles.mandatoryBanner}>
               <Text style={styles.mandatoryText}>
-                ⚠️ This update is required to continue using StudyPal.
+                This update is required to continue using StudyPal.
               </Text>
             </View>
           )}

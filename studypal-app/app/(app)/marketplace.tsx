@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Image, ScrollView, Linking,
@@ -64,7 +65,7 @@ export default function MarketplaceScreen() {
 
   const renderHeader = () => (
     <>
-      <Text style={styles.pageTitle}>Marketplace 🛍️</Text>
+      <Text style={styles.pageTitle}>Marketplace</Text>
 
       {/* Ad carousel */}
       {ads.length > 0 && (
@@ -104,7 +105,10 @@ export default function MarketplaceScreen() {
 
       {/* Notice Board — always shown above items */}
       <View style={styles.noticeSection}>
-        <Text style={styles.sectionTitle}>📢 Notice Board</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Notice board</Text>
+        </View>
         {notices.length === 0 ? (
           <Card style={styles.emptyNotice}>
             <Text style={styles.emptyNoticeText}>No announcements at the moment.</Text>
@@ -125,7 +129,7 @@ export default function MarketplaceScreen() {
 
       {/* Search */}
       <View style={styles.searchBox}>
-        <Text style={{ fontSize: 15, marginRight: 8 }}>🔍</Text>
+        <Ionicons name="search" size={18} color={colors.text.muted} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search marketplace…"
@@ -164,7 +168,7 @@ export default function MarketplaceScreen() {
           />
         ) : (
           <View style={[styles.itemImage, styles.noImage]}>
-            <Text style={{ fontSize: 32 }}>📦</Text>
+            <Ionicons name="cube-outline" size={34} color={colors.text.muted} />
           </View>
         )}
         {sold && (
@@ -192,7 +196,7 @@ export default function MarketplaceScreen() {
                 style={styles.contactBtn}
                 onPress={() => setShowContact(showContact === item.id ? null : item.id)}
               >
-                <Text style={{ fontSize: 18 }}>📞</Text>
+                <Ionicons name="call-outline" size={19} color={colors.primary} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -227,7 +231,7 @@ export default function MarketplaceScreen() {
           ListFooterComponent={renderFooter}
           ListEmptyComponent={
             <Card style={styles.empty}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>🛒</Text>
+              <Ionicons name="cart-outline" size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
               <Text style={styles.emptyTitle}>No items listed</Text>
               <Text style={styles.emptySub}>Check back later or clear your filters.</Text>
             </Card>

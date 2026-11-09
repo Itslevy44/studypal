@@ -1,10 +1,11 @@
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
 import { RADIUS, SHADOW } from '../constants';
 import { UpdateInfo } from '../hooks/useUpdateChecker';
-import { useThemedStyles } from '../context/ThemeContext';
+import { useTheme, useThemedStyles } from '../context/ThemeContext';
 import type { Palette } from '../constants/theme';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function UpdateModal({ info, onUpdate, onDismiss }: Props) {
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   return (
     <Modal
@@ -26,7 +28,7 @@ export function UpdateModal({ info, onUpdate, onDismiss }: Props) {
         <View style={styles.sheet}>
           {/* Icon */}
           <View style={styles.iconWrap}>
-            <Text style={styles.icon}>🚀</Text>
+            <Ionicons name="rocket-outline" size={30} color={colors.primary} />
           </View>
 
           {/* Title */}

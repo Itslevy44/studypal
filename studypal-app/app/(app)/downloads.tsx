@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator,
@@ -84,7 +85,7 @@ function buildPdfViewerHtml(base64: string, dark: boolean): string {
 </style>
 </head>
 <body>
-<div id="loading">📄 Loading PDF...</div>
+<div id="loading">Loading PDF...</div>
 <div id="pages"></div>
 <div id="controls" style="display:none">
   <button class="ctrl-btn" id="prev" onclick="changePage(-1)" disabled>‹ Prev</button>
@@ -127,7 +128,7 @@ pdfjsLib.getDocument({ data: bytes }).promise.then(async (pdf) => {
   document.getElementById('next').disabled = pdf.numPages === 1;
   for (let i = 1; i <= pdf.numPages; i++) await renderPage(i);
 }).catch((err) => {
-  document.getElementById('loading').innerHTML = '❌ Failed to load PDF.<br><small>' + err.message + '</small>';
+  document.getElementById('loading').innerHTML = 'Failed to load PDF.<br><small>' + err.message + '</small>';
 });
 
 function changePage(delta) {
@@ -215,11 +216,14 @@ export default function DownloadsScreen() {
         {/* Header */}
         <View style={styles.viewerHeader}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={styles.viewerBadge}>🔒 Secure Viewer</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Ionicons name="lock-closed" size={11} color={colors.primaryLight} />
+              <Text style={styles.viewerBadge}>Secure viewer</Text>
+            </View>
             <Text style={styles.viewerTitle} numberOfLines={1}>{viewing.title}</Text>
           </View>
           <TouchableOpacity onPress={closePaper} style={styles.closeBtn}>
-            <Text style={styles.closeText}>✕</Text>
+            <Ionicons name="close" size={20} color={colors.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -257,7 +261,7 @@ export default function DownloadsScreen() {
           keyExtractor={(p) => p.id}
           ListHeaderComponent={
             <View style={styles.header}>
-              <Text style={styles.pageTitle}>Offline Downloads 📥</Text>
+              <Text style={styles.pageTitle}>Offline Downloads</Text>
               <Text style={styles.pageSub}>Papers saved to your device</Text>
             </View>
           }
@@ -279,20 +283,21 @@ export default function DownloadsScreen() {
                   style={styles.viewBtn}
                   onPress={() => openPaper(item)}
                 >
-                  <Text style={styles.viewBtnText}>📖  Read Paper</Text>
+                  <Ionicons name="book-outline" size={17} color="#fff" />
+                  <Text style={styles.viewBtnText}>Read paper</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteBtn}
                   onPress={() => handleDelete(item)}
                 >
-                  <Text style={{ fontSize: 16 }}>🗑️</Text>
+                  <Ionicons name="trash-outline" size={19} color={colors.error} />
                 </TouchableOpacity>
               </View>
             </Card>
           )}
           ListEmptyComponent={
             <Card style={styles.empty}>
-              <Text style={{ fontSize: 40, marginBottom: 10 }}>📭</Text>
+              <Ionicons name="cloud-offline-outline" size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
               <Text style={styles.emptyTitle}>No Downloads Yet</Text>
               <Text style={styles.emptySub}>
                 Papers you download from the Papers tab will appear here for offline study.
@@ -329,7 +334,7 @@ const createStyles = (c: Palette) => StyleSheet.create({
   cardActions: { flexDirection: 'row', gap: 10 },
   viewBtn: {
     flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: c.primary,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
   viewBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   deleteBtn: {

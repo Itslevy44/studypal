@@ -150,10 +150,10 @@ export default function DashboardScreen() {
             <View style={[styles.subBanner, expired ? styles.subBannerExpired : daysLeft <= 3 ? styles.subBannerUrgent : styles.subBannerWarning]}>
               <Text style={styles.subBannerText}>
                 {expired
-                  ? `⚠️ Your ${isTrial ? 'free trial' : 'subscription'} has expired. Renew to keep accessing papers.`
+                  ? `Your ${isTrial ? 'free trial' : 'subscription'} has expired. Renew to keep accessing papers.`
                   : isTrial
-                    ? `🎁 Free trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left. Subscribe to keep access.`
-                    : `⏰ Subscription expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew now.`
+                    ? `Free trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left. Subscribe to keep access.`
+                    : `Subscription expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew now.`
                 }
               </Text>
               <TouchableOpacity

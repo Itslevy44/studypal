@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -41,7 +42,7 @@ export function MpesaModal({
     try {
       await api.mpesa.stkPush({ phoneNumber: phone, amount, accountReference, transactionDesc });
       setStatus('success');
-      setMessage('✅ STK Push sent! Enter your M-Pesa PIN on your phone to complete.');
+      setMessage('STK push sent. Enter your M-Pesa PIN on your phone to complete.');
       setTimeout(() => {
         setStatus('idle');
         setMessage('');
@@ -74,7 +75,7 @@ export function MpesaModal({
               <Text style={styles.subtitle} numberOfLines={1}>{title}</Text>
             </View>
             <TouchableOpacity onPress={handleClose} disabled={status === 'loading'} style={styles.closeBtn}>
-              <Text style={styles.closeX}>✕</Text>
+              <Ionicons name="close" size={20} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
 
@@ -84,7 +85,7 @@ export function MpesaModal({
               <Text style={styles.priceLabel}>Amount</Text>
               <Text style={styles.price}>KES {amount.toLocaleString()}</Text>
             </View>
-            <Text style={styles.priceEmoji}>📱</Text>
+            <Ionicons name="phone-portrait-outline" size={30} color={colors.primary} />
           </View>
 
           <Input

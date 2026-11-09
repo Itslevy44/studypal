@@ -60,7 +60,7 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <Text style={styles.heading}>Welcome back 👋</Text>
+        <Text style={styles.heading}>Welcome back</Text>
         <Text style={styles.sub}>Sign in to access your study materials.</Text>
 
         {error ? (
