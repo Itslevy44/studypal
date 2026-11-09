@@ -10,6 +10,7 @@ import { Card } from '../../components/ui/Card';
 import { PaperCardSkeleton } from '../../components/ui/Skeleton';
 import { PaperCard } from '../../components/PaperCard';
 import { usePaperActions } from '../../hooks/usePaperActions';
+import { scheduleSubscriptionReminder } from '../../lib/notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { MpesaModal } from '../../components/MpesaModal';
 import { RADIUS, SHADOW } from '../../constants';
@@ -58,6 +59,7 @@ export default function DashboardScreen() {
           expiryDate: subsData.subscription.expiryDate,
           isTrial: subsData.subscription.isTrial || false,
         });
+        scheduleSubscriptionReminder(subsData.subscription.expiryDate, !!subsData.subscription.isTrial);
       }
     } catch {
       // Show stale data silently

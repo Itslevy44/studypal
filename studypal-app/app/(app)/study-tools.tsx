@@ -12,6 +12,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { Card } from '../../components/ui/Card';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import { cancelReminders, scheduleExamReminders } from '../../lib/notifications';
 import { useToast } from '../../context/ToastContext';
 import type { Palette } from '../../constants/theme';
 import { RADIUS } from '../../constants';
@@ -144,7 +145,7 @@ function FocusTimer() {
 }
 
 // ───────────────────────────── Exam countdown ─────────────────────────────
-interface Exam { id: string; course: string; date: string } // date = ISO
+interface Exam { id: string; course: string; date: string; notifIds?: string[] } // date = ISO
 
 function daysUntil(iso: string) {
   const a = new Date(); a.setHours(0, 0, 0, 0);
@@ -166,11 +167,19 @@ function ExamCountdown() {
     [exams]
   );
 
-  const add = () => {
+  const add = async () => {
     if (!course.trim()) { toast.show('Enter a course or exam name', 'error'); return; }
-    setExams((e) => [...e, { id: `${Date.now()}`, course: course.trim(), date: date.toISOString() }]);
+    const name = course.trim();
+    const notifIds = await scheduleExamReminders(name, date);
+    setExams((e) => [...e, { id: `${Date.now()}`, course: name, date: date.toISOString(), notifIds }]);
     setCourse('');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (notifIds.length) toast.show('Exam added. Reminders set.', 'success');
+  };
+
+  const remove = (exam: Exam) => {
+    cancelReminders(exam.notifIds);
+    setExams((x) => x.filter((y) => y.id !== exam.id));
   };
 
   return (
@@ -223,7 +232,7 @@ function ExamCountdown() {
                 {new Date(e.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
             </View>
-            <TouchableOpacity hitSlop={12} onPress={() => setExams((x) => x.filter((y) => y.id !== e.id))} accessibilityLabel={`Delete ${e.course}`}>
+            <TouchableOpacity hitSlop={12} onPress={() => remove(e)} accessibilityLabel={`Delete ${e.course}`}>
               <Ionicons name="trash-outline" size={20} color={colors.text.muted} />
             </TouchableOpacity>
           </Card>

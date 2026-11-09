@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from '../../context/ToastContext';
+import { ensurePermission, remindersEnabled, setRemindersEnabled } from '../../lib/notifications';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import { Input } from '../../components/ui/Input';
@@ -41,6 +42,18 @@ export default function ProfileScreen() {
     }
     setCheckedOnce(false);
   }, [checkedOnce, updateAvailable, updateInfo]);
+
+  const [reminders, setReminders] = useState(true);
+  useEffect(() => { remindersEnabled().then(setReminders); }, []);
+  const toggleReminders = async (on: boolean) => {
+    if (on && !(await ensurePermission())) {
+      toast.show('Allow notifications for StudyPal in your phone settings.', 'error');
+      return;
+    }
+    setReminders(on);
+    await setRemindersEnabled(on);
+    toast.show(on ? 'Reminders on. New exams and renewals will notify you.' : 'Reminders off', 'info');
+  };
 
   const [universities, setUniversities] = useState<any[]>([]);
   const [fullName, setFullName] = useState(user?.fullName ?? '');
@@ -163,6 +176,22 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
+        {/* Reminders */}
+        <Card style={styles.section}>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Reminders</Text>
+              <Text style={styles.switchHint}>Exam countdown alerts and subscription renewal notices.</Text>
+            </View>
+            <Switch
+              value={reminders}
+              onValueChange={toggleReminders}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor="#fff"
+            />
+          </View>
+        </Card>
+
         {/* App info + update check */}
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>App Information</Text>
@@ -221,6 +250,8 @@ export default function ProfileScreen() {
 }
 
 const createStyles = (c: Palette) => StyleSheet.create({
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  switchHint: { fontSize: 12, color: c.text.secondary, marginTop: -8 },
   segment: { flexDirection: 'row', backgroundColor: c.surfaceAlt, borderRadius: RADIUS.lg, padding: 4, gap: 4 },
   segmentItem: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
