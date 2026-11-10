@@ -34,9 +34,33 @@ export async function POST(req: Request) {
       : 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
 
     const isItem = String(accountReference).startsWith('item_');
-    const paymentAmount = isItem ? amount : 100;
+    // Never trust a client-supplied price: marketplace items are charged at their listed price.
+    let paymentAmount = 100;
+    let resolvedItemId: string | null = null;
+    if (isItem) {
+      const all = (await getMarketplaceItems()) || [];
+      const ref = String(accountReference);
+      const item = all.find((i: any) => i.id === ref) || all.find((i: any) => ref.length >= 8 && i.id.startsWith(ref));
+      if (!item) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
+      if (item.status === 'sold') {
+        return NextResponse.json({ error: 'This item has already been sold' }, { status: 409 });
+      }
+      paymentAmount = Math.ceil(Number(item.price));
+      if (!isFinite(paymentAmount) || paymentAmount <= 0) {
+        return NextResponse.json({ error: 'This item has no valid price' }, { status: 400 });
+      }
+      resolvedItemId = item.id;
+    }
     const paymentDesc = isItem ? (transactionDesc || 'Marketplace Item') : 'StudyPal: 3-Month All-Access Pass';
     const paymentRef = isItem ? (accountReference || 'item') : 'all_access';
+
+    // Optional shared secret so only Safaricom (who is given this URL) can hit the callback
+    const baseCallback = process.env.MPESA_CALLBACK_URL || 'https://mydomain.com/api/mpesa/callback';
+    const callbackUrl = process.env.MPESA_CALLBACK_SECRET
+      ? `${baseCallback}${baseCallback.includes('?') ? '&' : '?'}secret=${encodeURIComponent(process.env.MPESA_CALLBACK_SECRET)}`
+      : baseCallback;
 
     const payload = {
       BusinessShortCode: shortcode,
@@ -47,7 +71,7 @@ export async function POST(req: Request) {
       PartyA: formattedPhone,
       PartyB: shortcode,
       PhoneNumber: formattedPhone,
-      CallBackURL: process.env.MPESA_CALLBACK_URL || 'https://mydomain.com/api/mpesa/callback',
+      CallBackURL: callbackUrl,
       AccountReference: paymentRef,
       TransactionDesc: paymentDesc,
     };
@@ -80,13 +104,7 @@ export async function POST(req: Request) {
     // Record the pending transaction mapping CheckoutRequestID -> { userId, paperId }
     if (data.CheckoutRequestID) {
       try {
-        let resolvedId = paymentRef;
-
-        if (isItem) {
-          const items = (await getMarketplaceItems()) || [];
-          const matchedItem = items.find((i: any) => i.id === accountReference || i.id.startsWith(accountReference));
-          if (matchedItem) resolvedId = matchedItem.id;
-        }
+        const resolvedId = resolvedItemId ?? paymentRef;
 
         await addPendingPayment({
           checkoutRequestId: data.CheckoutRequestID,
