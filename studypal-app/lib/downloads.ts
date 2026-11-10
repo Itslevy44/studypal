@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
 import { storage } from './storage';
 
@@ -62,4 +63,44 @@ export async function downloadPaper(
       savedAt: new Date().toISOString(),
     })
   );
+}
+
+export interface SavedPaperMeta {
+  id: string; title: string; course: string; examPeriod: string; yearOfStudy: string; savedAt: string;
+}
+
+/** Metadata of every paper saved on the device (for shelves like "Continue studying"). */
+export async function listDownloadedMeta(): Promise<SavedPaperMeta[]> {
+  try {
+    const files = await FileSystem.readDirectoryAsync(dir());
+    const out: SavedPaperMeta[] = [];
+    for (const f of files.filter((n) => n.endsWith('.meta.json'))) {
+      const id = f.replace('.meta.json', '');
+      if (!(await isDownloaded(id))) continue;
+      try { out.push(JSON.parse(await FileSystem.readAsStringAsync(`${dir()}${f}`))); } catch { /* skip corrupt meta */ }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+const RECENT_KEY = 'sp_recent_opened';
+
+/** Remember that a paper was just opened (most recent first, max 10). */
+export async function recordOpened(id: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENT_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    await AsyncStorage.setItem(RECENT_KEY, JSON.stringify([id, ...list.filter((x) => x !== id)].slice(0, 10)));
+  } catch { /* best-effort */ }
+}
+
+export async function getRecentOpened(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }

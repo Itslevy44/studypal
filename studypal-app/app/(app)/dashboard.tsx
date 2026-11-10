@@ -11,6 +11,8 @@ import { PaperCardSkeleton } from '../../components/ui/Skeleton';
 import { PaperCard } from '../../components/PaperCard';
 import { usePaperActions } from '../../hooks/usePaperActions';
 import { scheduleSubscriptionReminder } from '../../lib/notifications';
+import { getRecentOpened, listDownloadedMeta, SavedPaperMeta } from '../../lib/downloads';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { MpesaModal } from '../../components/MpesaModal';
 import { RADIUS, SHADOW } from '../../constants';
@@ -36,6 +38,17 @@ export default function DashboardScreen() {
 
   const [mpesaTarget, setMpesaTarget] = useState<any | null>(null);
   const actions = usePaperActions();
+  const [recent, setRecent] = useState<SavedPaperMeta[]>([]);
+
+  // "Continue studying": saved papers, most recently opened first
+  useFocusEffect(useCallback(() => {
+    (async () => {
+      const [metas, order] = await Promise.all([listDownloadedMeta(), getRecentOpened()]);
+      const rank = (id: string) => { const i = order.indexOf(id); return i === -1 ? 999 : i; };
+      setRecent([...metas].sort((a, b) =>
+        rank(a.id) - rank(b.id) || new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()).slice(0, 6));
+    })();
+  }, []));
 
   // Refresh user once on mount only — not inside loadData to avoid re-render loop
   useEffect(() => { refreshUser(); }, []);
@@ -120,6 +133,34 @@ export default function DashboardScreen() {
             <Text style={[styles.statValue, { color: colors.success }]}>{freePaperCount}</Text>
           </View>
         </View>
+
+        {/* Continue studying */}
+        {recent.length > 0 && (
+          <View style={{ marginBottom: 24 }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Continue studying</Text>
+              <TouchableOpacity onPress={() => router.push('/(app)/downloads')}>
+                <Text style={styles.viewAll}>Offline</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+              {recent.map((r) => (
+                <TouchableOpacity
+                  key={r.id}
+                  activeOpacity={0.85}
+                  style={styles.recentCard}
+                  onPress={() => router.push({ pathname: '/(app)/downloads', params: { open: r.id } })}
+                >
+                  <View style={styles.recentIcon}><Ionicons name="document-text" size={18} color={colors.primary} /></View>
+                  <Text style={styles.recentCourse} numberOfLines={1}>{r.course}</Text>
+                  <Text style={styles.recentMeta} numberOfLines={1}>
+                    {[r.examPeriod, r.yearOfStudy].filter((x) => x && x !== '—').join(' · ') || 'Saved paper'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Study tools shortcuts */}
         <View style={styles.toolsRow}>
@@ -214,6 +255,13 @@ export default function DashboardScreen() {
 }
 
 const createStyles = (c: Palette) => StyleSheet.create({
+  recentCard: {
+    width: 150, padding: 14, gap: 4, backgroundColor: c.surface,
+    borderRadius: RADIUS.xl, borderWidth: 1, borderColor: c.border,
+  },
+  recentIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  recentCourse: { fontSize: 14, fontWeight: '800', color: c.text.primary },
+  recentMeta: { fontSize: 11, color: c.text.secondary },
   toolsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
   toolTile: {
     flex: 1, alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 6,
