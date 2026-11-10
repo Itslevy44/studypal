@@ -3,12 +3,21 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenCapture from 'expo-screen-capture';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/AuthContext';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { ToastProvider } from '../context/ToastContext';
+import { BookmarksProvider } from '../context/BookmarksContext';
 import { UpdateModal } from '../components/UpdateModal';
 import { useUpdateChecker } from '../lib/useUpdateChecker';
 import { COLORS } from '../constants';
 
 SplashScreen.preventAutoHideAsync();
+
+function ThemedStatusBar() {
+  const { isDark, colors } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={colors.background} />;
+}
 
 function AppWithUpdateChecker() {
   const { updateInfo, dismissUpdate, openDownload } = useUpdateChecker();
@@ -43,9 +52,17 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" backgroundColor={COLORS.dark} />
-      <AppWithUpdateChecker />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+      <AuthProvider>
+        <BookmarksProvider>
+          <ToastProvider>
+            <ThemedStatusBar />
+            <AppWithUpdateChecker />
+          </ToastProvider>
+        </BookmarksProvider>
+      </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

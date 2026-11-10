@@ -1,9 +1,12 @@
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, Linking,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOW } from '../constants';
+import { RADIUS, SHADOW } from '../constants';
 import { UpdateInfo } from '../lib/useUpdateChecker';
+import { useTheme, useThemedStyles } from '../context/ThemeContext';
+import type { Palette } from '../constants/theme';
 
 interface Props {
   visible: boolean;
@@ -13,6 +16,8 @@ interface Props {
 }
 
 export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   if (!info) return null;
 
   return (
@@ -26,7 +31,7 @@ export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
         <View style={styles.sheet}>
           {/* Header */}
           <View style={styles.iconWrap}>
-            <Text style={styles.icon}>🚀</Text>
+            <Ionicons name="rocket-outline" size={28} color={colors.premiumText} />
           </View>
 
           <Text style={styles.title}>Update Available</Text>
@@ -47,7 +52,7 @@ export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
           {info.mandatory && (
             <View style={styles.mandatoryBanner}>
               <Text style={styles.mandatoryText}>
-                ⚠️ This update is required to continue using StudyPal.
+                This update is required to continue using StudyPal.
               </Text>
             </View>
           )}
@@ -68,7 +73,7 @@ export function UpdateBanner({ visible, info, onDismiss, onUpdate }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(2,6,23,0.65)',
@@ -77,7 +82,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderRadius: RADIUS.xxl,
     padding: 28,
     width: '100%',
@@ -89,7 +94,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: '#ede9fe',
+    backgroundColor: c.premiumSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -98,21 +103,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: COLORS.text.primary,
+    color: c.text.primary,
     marginBottom: 4,
   },
   versionLine: {
     fontSize: 14,
-    color: COLORS.text.secondary,
+    color: c.text.secondary,
     marginBottom: 16,
   },
-  versionBold: { color: COLORS.primary, fontWeight: '700' },
+  versionBold: { color: c.primary, fontWeight: '700' },
   notesBox: {
     width: '100%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: c.background,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     padding: 12,
     marginBottom: 16,
   },
@@ -121,15 +126,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: COLORS.text.muted,
+    color: c.text.muted,
     marginBottom: 6,
   },
-  notes: { fontSize: 13, color: COLORS.text.secondary, lineHeight: 20 },
+  notes: { fontSize: 13, color: c.text.secondary, lineHeight: 20 },
   mandatoryBanner: {
-    backgroundColor: '#fff7ed',
+    backgroundColor: c.orangeSoft,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#fed7aa',
+    borderColor: c.orangeBorder,
     padding: 10,
     marginBottom: 16,
     width: '100%',
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 52,
     borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -152,5 +157,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  laterBtnText: { fontSize: 14, color: COLORS.text.secondary, fontWeight: '600' },
+  laterBtnText: { fontSize: 14, color: c.text.secondary, fontWeight: '600' },
 });

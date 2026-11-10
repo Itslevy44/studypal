@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
   RefreshControl, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +9,9 @@ import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { COLORS, RADIUS } from '../../constants';
+import { RADIUS } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface DownloadedPaper {
   id: string;
@@ -18,7 +21,10 @@ interface DownloadedPaper {
   yearOfStudy: string;
   fileUri: string;
   savedAt: string;
+  size: number;
 }
+
+const formatSize = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
   try {
@@ -34,6 +40,11 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
         const raw = await FileSystem.readAsStringAsync(metaPath);
         meta = JSON.parse(raw);
       } catch { /* no metadata */ }
+      let size = 0;
+      try {
+        const info = await FileSystem.getInfoAsync(`${dir}${f}`);
+        if (info.exists && 'size' in info) size = info.size ?? 0;
+      } catch { /* ignore */ }
       results.push({
         id,
         title: meta.title || id,
@@ -42,41 +53,48 @@ async function listDownloadedPapers(): Promise<DownloadedPaper[]> {
         yearOfStudy: meta.yearOfStudy || '—',
         fileUri: `${dir}${f}`,
         savedAt: meta.savedAt || new Date().toISOString(),
+        size,
       });
     }
-    return results;
+    return results.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   } catch { return []; }
 }
 
 /** Build a self-contained HTML page that renders a PDF from a base64 string using PDF.js */
-function buildPdfViewerHtml(base64: string): string {
+function buildPdfViewerHtml(base64: string, dark: boolean): string {
+  const bg = dark ? '#0b1120' : '#f8fafc';
+  const bar = dark ? 'rgba(19,28,49,0.97)' : 'rgba(255,255,255,0.97)';
+  const line = dark ? '#26334f' : '#e2e8f0';
+  const muted = dark ? '#9aa8c0' : '#64748b';
+  const accent = dark ? '#6366f1' : '#4f46e5';
+  const disabled = dark ? '#2b3158' : '#c7d2fe';
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #f8fafc; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
-  #loading { color: #4f46e5; font-size: 14px; padding: 40px; text-align: center; }
+  body { background: ${bg}; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
+  #loading { color: ${accent}; font-size: 14px; padding: 40px; text-align: center; }
   canvas { display: block; width: 100%; margin-bottom: 6px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
   #controls {
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: rgba(255,255,255,0.97); padding: 10px 16px;
+    background: ${bar}; padding: 10px 16px;
     display: flex; align-items: center; justify-content: space-between;
-    border-top: 1px solid #e2e8f0; z-index: 100;
+    border-top: 1px solid ${line}; z-index: 100;
     box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
   }
   .ctrl-btn {
-    background: #4f46e5; color: white; border: none; border-radius: 8px;
+    background: ${accent}; color: white; border: none; border-radius: 8px;
     padding: 8px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
   }
-  .ctrl-btn:disabled { opacity: 0.35; background: #c7d2fe; }
-  #page-info { color: #64748b; font-size: 13px; font-weight: 600; }
+  .ctrl-btn:disabled { opacity: 0.35; background: ${disabled}; }
+  #page-info { color: ${muted}; font-size: 13px; font-weight: 600; }
   #pages { padding-bottom: 60px; width: 100%; }
 </style>
 </head>
 <body>
-<div id="loading">📄 Loading PDF...</div>
+<div id="loading">Loading PDF...</div>
 <div id="pages"></div>
 <div id="controls" style="display:none">
   <button class="ctrl-btn" id="prev" onclick="changePage(-1)" disabled>‹ Prev</button>
@@ -119,7 +137,7 @@ pdfjsLib.getDocument({ data: bytes }).promise.then(async (pdf) => {
   document.getElementById('next').disabled = pdf.numPages === 1;
   for (let i = 1; i <= pdf.numPages; i++) await renderPage(i);
 }).catch((err) => {
-  document.getElementById('loading').innerHTML = '❌ Failed to load PDF.<br><small>' + err.message + '</small>';
+  document.getElementById('loading').innerHTML = 'Failed to load PDF.<br><small>' + err.message + '</small>';
 });
 
 function changePage(delta) {
@@ -138,12 +156,15 @@ function changePage(delta) {
 }
 
 export default function DownloadsScreen() {
+  const { colors, isDark } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [papers, setPapers] = useState<DownloadedPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewing, setViewing] = useState<DownloadedPaper | null>(null);
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     const list = await listDownloadedPapers();
@@ -154,6 +175,12 @@ export default function DownloadsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const totalSize = useMemo(() => papers.reduce((n, p) => n + (p.size || 0), 0), [papers]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? papers.filter((p) => `${p.course} ${p.title}`.toLowerCase().includes(q)) : papers;
+  }, [papers, query]);
+
   const openPaper = async (paper: DownloadedPaper) => {
     setPdfLoading(true);
     setViewing(paper);
@@ -161,7 +188,7 @@ export default function DownloadsScreen() {
       const base64 = await FileSystem.readAsStringAsync(paper.fileUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      setPdfHtml(buildPdfViewerHtml(base64));
+      setPdfHtml(buildPdfViewerHtml(base64, isDark));
     } catch {
       Alert.alert('Error', 'Could not open this PDF. The file may be corrupted.');
       setViewing(null);
@@ -201,27 +228,30 @@ export default function DownloadsScreen() {
   // ── In-app PDF Viewer ──────────────────────────────────────────────────────
   if (viewing) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         {/* Header */}
         <View style={styles.viewerHeader}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={styles.viewerBadge}>🔒 Secure Viewer</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Ionicons name="lock-closed" size={11} color={colors.primaryLight} />
+              <Text style={styles.viewerBadge}>Secure viewer</Text>
+            </View>
             <Text style={styles.viewerTitle} numberOfLines={1}>{viewing.title}</Text>
           </View>
           <TouchableOpacity onPress={closePaper} style={styles.closeBtn}>
-            <Text style={styles.closeText}>✕</Text>
+            <Ionicons name="close" size={20} color={colors.text.secondary} />
           </TouchableOpacity>
         </View>
 
         {pdfLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={{ color: '#64748b', marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={{ color: colors.text.secondary, marginTop: 12, fontSize: 13 }}>Loading PDF…</Text>
           </View>
         ) : pdfHtml ? (
           <WebView
             source={{ html: pdfHtml }}
-            style={{ flex: 1, backgroundColor: '#f8fafc' }}
+            style={{ flex: 1, backgroundColor: colors.background }}
             originWhitelist={['*']}
             javaScriptEnabled
             allowsInlineMediaPlayback
@@ -239,16 +269,39 @@ export default function DownloadsScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
-          data={papers}
+          data={filtered}
           keyExtractor={(p) => p.id}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View style={styles.header}>
-              <Text style={styles.pageTitle}>Offline Downloads 📥</Text>
-              <Text style={styles.pageSub}>Papers saved to your device</Text>
+              <Text style={styles.pageTitle}>Offline Downloads</Text>
+              <Text style={styles.pageSub}>
+                {papers.length === 0
+                  ? 'Papers saved to your device'
+                  : `${papers.length} paper${papers.length === 1 ? '' : 's'} · ${formatSize(totalSize)} on this device`}
+              </Text>
+              {papers.length > 3 && (
+                <View style={styles.searchBox}>
+                  <Ionicons name="search" size={18} color={colors.text.muted} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search saved papers"
+                    placeholderTextColor={colors.text.muted}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCorrect={false}
+                  />
+                  {query ? (
+                    <TouchableOpacity onPress={() => setQuery('')} hitSlop={10}>
+                      <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
             </View>
           }
           renderItem={({ item }) => (
@@ -261,31 +314,35 @@ export default function DownloadsScreen() {
               </View>
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardMeta}>
-                {item.examPeriod !== '—' ? `${item.examPeriod} • ` : ''}
-                {item.yearOfStudy !== '—' ? `Year ${item.yearOfStudy}` : ''}
+                {[item.examPeriod !== '—' ? item.examPeriod : '', item.yearOfStudy !== '—' ? item.yearOfStudy : '', item.size ? formatSize(item.size) : '']
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
               <View style={styles.cardActions}>
                 <TouchableOpacity
                   style={styles.viewBtn}
                   onPress={() => openPaper(item)}
                 >
-                  <Text style={styles.viewBtnText}>📖  Read Paper</Text>
+                  <Ionicons name="book-outline" size={17} color="#fff" />
+                  <Text style={styles.viewBtnText}>Read paper</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteBtn}
                   onPress={() => handleDelete(item)}
                 >
-                  <Text style={{ fontSize: 16 }}>🗑️</Text>
+                  <Ionicons name="trash-outline" size={19} color={colors.error} />
                 </TouchableOpacity>
               </View>
             </Card>
           )}
           ListEmptyComponent={
             <Card style={styles.empty}>
-              <Text style={{ fontSize: 40, marginBottom: 10 }}>📭</Text>
-              <Text style={styles.emptyTitle}>No Downloads Yet</Text>
+              <Ionicons name={papers.length ? 'search-outline' : 'cloud-offline-outline'} size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
+              <Text style={styles.emptyTitle}>{papers.length ? 'No matches' : 'No Downloads Yet'}</Text>
               <Text style={styles.emptySub}>
-                Papers you download from the Papers tab will appear here for offline study.
+                {papers.length
+                  ? 'Try a different course name.'
+                  : 'Papers you download from the Papers tab will appear here for offline study.'}
               </Text>
             </Card>
           }
@@ -294,7 +351,7 @@ export default function DownloadsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor={COLORS.primary}
+              tintColor={colors.primary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -304,40 +361,45 @@ export default function DownloadsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
   list: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { marginBottom: 20 },
-  pageTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text.primary },
-  pageSub: { fontSize: 13, color: COLORS.text.secondary, marginTop: 2 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14,
+    backgroundColor: c.surface, borderRadius: RADIUS.xl, borderWidth: 1, borderColor: c.border, paddingHorizontal: 14,
+  },
+  searchInput: { flex: 1, height: 46, fontSize: 14, fontWeight: '500', color: c.text.primary },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: c.text.primary },
+  pageSub: { fontSize: 13, color: c.text.secondary, marginTop: 2 },
   card: { marginBottom: 14, padding: 18 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  cardDate: { fontSize: 11, color: COLORS.text.muted },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
-  cardMeta: { fontSize: 12, color: COLORS.text.secondary, marginBottom: 14 },
+  cardDate: { fontSize: 11, color: c.text.muted },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: c.text.primary, marginBottom: 4 },
+  cardMeta: { fontSize: 12, color: c.text.secondary, marginBottom: 14 },
   cardActions: { flexDirection: 'row', gap: 10 },
   viewBtn: {
-    flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: c.primary,
+    alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
   viewBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   deleteBtn: {
     width: 44, height: 44, borderRadius: RADIUS.lg,
-    backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.errorSoft, alignItems: 'center', justifyContent: 'center',
   },
   empty: { alignItems: 'center', padding: 36, marginTop: 20 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
-  emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: c.text.primary, marginBottom: 6 },
+  emptySub: { fontSize: 13, color: c.text.secondary, textAlign: 'center', lineHeight: 20 },
   // Viewer
   viewerHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#ffffff', paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    backgroundColor: c.surface, paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: c.border,
     elevation: 2,
   },
-  viewerBadge: { color: COLORS.primary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  viewerTitle: { color: COLORS.text.primary, fontSize: 14, fontWeight: '700' },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: COLORS.text.secondary, fontWeight: '700', fontSize: 14 },
+  viewerBadge: { color: c.primary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  viewerTitle: { color: c.text.primary, fontSize: 14, fontWeight: '700' },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  closeText: { color: c.text.secondary, fontWeight: '700', fontSize: 14 },
 });

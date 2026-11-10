@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Image, ScrollView, Linking,
@@ -9,11 +10,15 @@ import { api } from '../../lib/api';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { MpesaModal } from '../../components/MpesaModal';
-import { COLORS, RADIUS, SHADOW, API_BASE_URL } from '../../constants';
+import { RADIUS, SHADOW, API_BASE_URL } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 const CATEGORIES = ['All', 'Calculators', 'Furniture', 'Electronics', 'Textbooks', 'Others'];
 
 export default function MarketplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
   const [items, setItems] = useState<any[]>([]);
   const [ads, setAds] = useState<any[]>([]);
@@ -60,7 +65,7 @@ export default function MarketplaceScreen() {
 
   const renderHeader = () => (
     <>
-      <Text style={styles.pageTitle}>Marketplace 🛍️</Text>
+      <Text style={styles.pageTitle}>Marketplace</Text>
 
       {/* Ad carousel */}
       {ads.length > 0 && (
@@ -100,7 +105,10 @@ export default function MarketplaceScreen() {
 
       {/* Notice Board — always shown above items */}
       <View style={styles.noticeSection}>
-        <Text style={styles.sectionTitle}>📢 Notice Board</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Notice board</Text>
+        </View>
         {notices.length === 0 ? (
           <Card style={styles.emptyNotice}>
             <Text style={styles.emptyNoticeText}>No announcements at the moment.</Text>
@@ -109,7 +117,7 @@ export default function MarketplaceScreen() {
           notices.map((n) => (
             <Card key={n.id} style={styles.noticeCard}>
               <View style={styles.noticeTop}>
-                <Badge label={n.category} color={COLORS.primary} bg="#e0e7ff" />
+                <Badge label={n.category} color={colors.primary} bg={colors.primarySoft} />
                 <Text style={styles.noticeDate}>{new Date(n.createdAt).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.noticeTitle}>{n.title}</Text>
@@ -121,11 +129,11 @@ export default function MarketplaceScreen() {
 
       {/* Search */}
       <View style={styles.searchBox}>
-        <Text style={{ fontSize: 15, marginRight: 8 }}>🔍</Text>
+        <Ionicons name="search" size={18} color={colors.text.muted} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search marketplace…"
-          placeholderTextColor={COLORS.text.muted}
+          placeholderTextColor={colors.text.muted}
           value={search}
           onChangeText={setSearch}
         />
@@ -160,7 +168,7 @@ export default function MarketplaceScreen() {
           />
         ) : (
           <View style={[styles.itemImage, styles.noImage]}>
-            <Text style={{ fontSize: 32 }}>📦</Text>
+            <Ionicons name="cube-outline" size={34} color={colors.text.muted} />
           </View>
         )}
         {sold && (
@@ -171,7 +179,7 @@ export default function MarketplaceScreen() {
         <View style={styles.itemBody}>
           <View style={styles.itemBadges}>
             <Badge label={item.category} />
-            <Badge label={item.condition} color="#7c3aed" bg="#ede9fe" />
+            <Badge label={item.condition} color={colors.premiumText} bg={colors.premiumSoft} />
           </View>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.itemDesc} numberOfLines={2}>{item.description}</Text>
@@ -188,7 +196,7 @@ export default function MarketplaceScreen() {
                 style={styles.contactBtn}
                 onPress={() => setShowContact(showContact === item.id ? null : item.id)}
               >
-                <Text style={{ fontSize: 18 }}>📞</Text>
+                <Ionicons name="call-outline" size={19} color={colors.primary} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -212,7 +220,7 @@ export default function MarketplaceScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -223,13 +231,13 @@ export default function MarketplaceScreen() {
           ListFooterComponent={renderFooter}
           ListEmptyComponent={
             <Card style={styles.empty}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>🛒</Text>
+              <Ionicons name="cart-outline" size={44} color={colors.text.muted} style={{ marginBottom: 10 }} />
               <Text style={styles.emptyTitle}>No items listed</Text>
               <Text style={styles.emptySub}>Check back later or clear your filters.</Text>
             </Card>
           }
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={COLORS.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -252,11 +260,11 @@ export default function MarketplaceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
   list: { padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pageTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text.primary, marginBottom: 16 },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: c.text.primary, marginBottom: 16 },
   adBox: { height: 200, borderRadius: RADIUS.xl, overflow: 'hidden', marginBottom: 16, backgroundColor: '#1e1b4b', ...SHADOW.md },
   adImage: { position: 'absolute', width: '100%', height: '100%', opacity: 0.7 },
   adOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, gap: 4, backgroundColor: 'rgba(0,0,0,0.35)' },
@@ -265,22 +273,22 @@ const styles = StyleSheet.create({
   adLink: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 4, textDecorationLine: 'underline' },
   adDots: { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
-  dotActive: { width: 14, backgroundColor: '#fff' },
+  dotActive: { width: 14, backgroundColor: c.surface },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: RADIUS.xl,
-    borderWidth: 2, borderColor: '#c7d2fe', paddingHorizontal: 14, marginBottom: 12, ...SHADOW.sm,
+    backgroundColor: c.surface, borderRadius: RADIUS.xl,
+    borderWidth: 2, borderColor: c.inputBorder, paddingHorizontal: 14, marginBottom: 12, ...SHADOW.sm,
   },
-  searchInput: { flex: 1, height: 46, fontSize: 14, fontWeight: '500', color: COLORS.text.primary },
+  searchInput: { flex: 1, height: 46, fontSize: 14, fontWeight: '500', color: c.text.primary },
   pills: { flexDirection: 'row', marginBottom: 20 },
-  pill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: '#f1f5f9', marginRight: 8 },
-  pillActive: { backgroundColor: COLORS.secondary },
-  pillText: { fontSize: 12, fontWeight: '700', color: COLORS.text.secondary },
+  pill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: c.surfaceAlt, marginRight: 8 },
+  pillActive: { backgroundColor: c.secondary },
+  pillText: { fontSize: 12, fontWeight: '700', color: c.text.secondary },
   pillTextActive: { color: '#fff' },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text.primary, marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: c.text.primary, marginBottom: 12 },
   itemCard: { marginBottom: 16, padding: 0, overflow: 'hidden' },
   itemImage: { width: '100%', height: 160 },
-  noImage: { backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  noImage: { backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   soldOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, height: 160,
     backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center',
@@ -288,36 +296,36 @@ const styles = StyleSheet.create({
   soldText: { color: '#f87171', fontSize: 20, fontWeight: '900', letterSpacing: 2, borderWidth: 2, borderColor: '#f87171', paddingHorizontal: 14, paddingVertical: 4, borderRadius: 8 },
   itemBody: { padding: 16 },
   itemBadges: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  itemTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
-  itemDesc: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 18, marginBottom: 10 },
-  itemPrice: { fontSize: 20, fontWeight: '900', color: COLORS.text.primary, marginBottom: 12 },
+  itemTitle: { fontSize: 15, fontWeight: '700', color: c.text.primary, marginBottom: 4 },
+  itemDesc: { fontSize: 12, color: c.text.secondary, lineHeight: 18, marginBottom: 10 },
+  itemPrice: { fontSize: 20, fontWeight: '900', color: c.text.primary, marginBottom: 12 },
   itemActions: { flexDirection: 'row', gap: 10 },
   buyBtn: {
-    flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: COLORS.secondary,
+    flex: 1, height: 44, borderRadius: RADIUS.lg, backgroundColor: c.secondary,
     alignItems: 'center', justifyContent: 'center',
   },
   buyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   contactBtn: {
     width: 44, height: 44, borderRadius: RADIUS.lg,
-    backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center',
   },
   soldBtn: {
-    height: 44, borderRadius: RADIUS.lg, backgroundColor: '#f1f5f9',
+    height: 44, borderRadius: RADIUS.lg, backgroundColor: c.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
   },
-  soldBtnText: { color: COLORS.text.muted, fontWeight: '700' },
+  soldBtnText: { color: c.text.muted, fontWeight: '700' },
   contactBox: { backgroundColor: '#1e293b', borderRadius: RADIUS.md, padding: 12, marginTop: 8 },
   contactLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   contactValue: { color: '#67e8f9', fontWeight: '700', fontSize: 14 },
   noticeSection: { marginBottom: 16 },
   noticeCard: { marginBottom: 12, padding: 14 },
   noticeTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  noticeDate: { fontSize: 11, color: COLORS.text.muted },
-  noticeTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
-  noticeContent: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 18 },
+  noticeDate: { fontSize: 11, color: c.text.muted },
+  noticeTitle: { fontSize: 13, fontWeight: '700', color: c.text.primary, marginBottom: 4 },
+  noticeContent: { fontSize: 12, color: c.text.secondary, lineHeight: 18 },
   emptyNotice: { padding: 14, marginBottom: 12 },
-  emptyNoticeText: { fontSize: 12, color: COLORS.text.muted, textAlign: 'center' },
+  emptyNoticeText: { fontSize: 12, color: c.text.muted, textAlign: 'center' },
   empty: { alignItems: 'center', padding: 36, marginTop: 20 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary, marginBottom: 6 },
-  emptySub: { fontSize: 13, color: COLORS.text.secondary, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: c.text.primary, marginBottom: 6 },
+  emptySub: { fontSize: 13, color: c.text.secondary, textAlign: 'center' },
 });

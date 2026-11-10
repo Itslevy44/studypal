@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Input } from './ui/Input';
 import { GradientButton } from './ui/GradientButton';
-import { COLORS, RADIUS, SHADOW } from '../constants';
+import { RADIUS, SHADOW } from '../constants';
 import { api } from '../lib/api';
+import { useTheme, useThemedStyles } from '../context/ThemeContext';
+import type { Palette } from '../constants/theme';
 
 interface Props {
   visible: boolean;
@@ -22,6 +25,8 @@ export function MpesaModal({
   visible, title, amount, accountReference, transactionDesc,
   defaultPhone = '', onClose, onSuccess,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [phone, setPhone] = useState(defaultPhone);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -37,7 +42,7 @@ export function MpesaModal({
     try {
       await api.mpesa.stkPush({ phoneNumber: phone, amount, accountReference, transactionDesc });
       setStatus('success');
-      setMessage('✅ STK Push sent! Enter your M-Pesa PIN on your phone to complete.');
+      setMessage('STK push sent. Enter your M-Pesa PIN on your phone to complete.');
       setTimeout(() => {
         setStatus('idle');
         setMessage('');
@@ -70,7 +75,7 @@ export function MpesaModal({
               <Text style={styles.subtitle} numberOfLines={1}>{title}</Text>
             </View>
             <TouchableOpacity onPress={handleClose} disabled={status === 'loading'} style={styles.closeBtn}>
-              <Text style={styles.closeX}>✕</Text>
+              <Ionicons name="close" size={20} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
 
@@ -80,7 +85,7 @@ export function MpesaModal({
               <Text style={styles.priceLabel}>Amount</Text>
               <Text style={styles.price}>KES {amount.toLocaleString()}</Text>
             </View>
-            <Text style={styles.priceEmoji}>📱</Text>
+            <Ionicons name="phone-portrait-outline" size={30} color={colors.primary} />
           </View>
 
           <Input
@@ -97,11 +102,11 @@ export function MpesaModal({
               status === 'error' ? styles.statusError :
               status === 'success' ? styles.statusSuccess : styles.statusInfo,
             ]}>
-              {status === 'loading' && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 8 }} />}
+              {status === 'loading' && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />}
               <Text style={[
                 styles.statusText,
-                status === 'error' ? { color: COLORS.error } :
-                status === 'success' ? { color: COLORS.success } : { color: COLORS.primary },
+                status === 'error' ? { color: colors.error } :
+                status === 'success' ? { color: colors.success } : { color: colors.primary },
               ]}>{message}</Text>
             </View>
           ) : null}
@@ -132,14 +137,14 @@ export function MpesaModal({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(2,6,23,0.55)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
@@ -152,27 +157,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 20,
   },
-  title: { fontSize: 20, fontWeight: '800', color: COLORS.text.primary },
-  subtitle: { fontSize: 13, color: COLORS.text.secondary, marginTop: 2, maxWidth: 240 },
+  title: { fontSize: 20, fontWeight: '800', color: c.text.primary },
+  subtitle: { fontSize: 13, color: c.text.secondary, marginTop: 2, maxWidth: 240 },
   closeBtn: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
   },
-  closeX: { fontSize: 14, color: COLORS.text.secondary, fontWeight: '700' },
+  closeX: { fontSize: 14, color: c.text.secondary, fontWeight: '700' },
   priceBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f5f3ff',
+    backgroundColor: c.premiumSoft,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#ddd6fe',
+    borderColor: c.inputBorder,
     padding: 16,
     marginBottom: 20,
   },
-  priceLabel: { fontSize: 10, fontWeight: '700', color: COLORS.text.muted, textTransform: 'uppercase', letterSpacing: 1 },
-  price: { fontSize: 28, fontWeight: '800', color: COLORS.primary },
+  priceLabel: { fontSize: 10, fontWeight: '700', color: c.text.muted, textTransform: 'uppercase', letterSpacing: 1 },
+  price: { fontSize: 28, fontWeight: '800', color: c.primary },
   priceEmoji: { fontSize: 28 },
   statusBox: {
     flexDirection: 'row',
@@ -182,15 +187,15 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 14,
   },
-  statusError: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
-  statusSuccess: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
-  statusInfo: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  statusError: { backgroundColor: c.errorSoft, borderColor: c.errorBorder },
+  statusSuccess: { backgroundColor: c.successSoft, borderColor: c.inputBorder },
+  statusInfo: { backgroundColor: c.infoSoft, borderColor: c.inputBorder },
   statusText: { fontSize: 13, fontWeight: '600', flex: 1 },
   actions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   cancelBtn: {
     height: 52, paddingHorizontal: 18, borderRadius: RADIUS.xl,
-    backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center',
   },
-  cancelText: { fontSize: 14, fontWeight: '700', color: COLORS.text.secondary },
-  hint: { fontSize: 12, color: COLORS.text.muted, textAlign: 'center' },
+  cancelText: { fontSize: 14, fontWeight: '700', color: c.text.secondary },
+  hint: { fontSize: 12, color: c.text.muted, textAlign: 'center' },
 });

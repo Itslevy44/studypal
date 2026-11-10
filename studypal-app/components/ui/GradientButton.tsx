@@ -1,6 +1,8 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
-import { COLORS, RADIUS, SHADOW } from '../../constants';
+import { RADIUS, SHADOW } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface Props {
   label: string;
@@ -12,17 +14,19 @@ interface Props {
   small?: boolean;
 }
 
-const VARIANTS = {
-  primary: { bg: COLORS.primary, text: '#fff' },
-  success: { bg: COLORS.success, text: '#fff' },
-  danger: { bg: COLORS.error, text: '#fff' },
-  ghost: { bg: '#f1f5f9', text: COLORS.text.primary },
-};
+const variantsFor = (colors: Palette) => ({
+  primary: { bg: colors.primary, text: '#fff' },
+  success: { bg: colors.success, text: '#fff' },
+  danger: { bg: colors.error, text: '#fff' },
+  ghost: { bg: colors.surfaceAlt, text: colors.text.primary },
+});
 
 export function GradientButton({
   label, onPress, loading, disabled, variant = 'primary', style, small,
 }: Props) {
-  const { bg, text } = VARIANTS[variant];
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const { bg, text } = variantsFor(colors)[variant];
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -48,7 +52,7 @@ export function GradientButton({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   base: {
     height: 52,
     borderRadius: RADIUS.xl,

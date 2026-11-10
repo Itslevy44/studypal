@@ -1,47 +1,61 @@
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { TextInput, View, Text, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
-import { COLORS, RADIUS } from '../../constants';
+import { RADIUS } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface Props extends TextInputProps {
   label: string;
   error?: string;
   secureToggle?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
 }
 
-export function Input({ label, error, secureToggle, style, ...props }: Props) {
+export const Input = forwardRef<TextInput, Props>(function Input(
+  { label, error, secureToggle, icon, style, onFocus, onBlur, ...props },
+  ref
+) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isSecure = props.secureTextEntry && !show;
 
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputRow, error ? styles.inputError : styles.inputNormal]}>
+      <View style={[styles.inputRow, error ? styles.inputError : focused ? styles.inputFocused : styles.inputNormal]}>
+        {icon && <Ionicons name={icon} size={18} color={focused ? colors.primary : colors.text.muted} style={styles.leading} />}
         <TextInput
+          ref={ref}
           {...props}
+          onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+          onBlur={(e) => { setFocused(false); onBlur?.(e); }}
           secureTextEntry={secureToggle ? isSecure : props.secureTextEntry}
           style={[styles.input, style]}
-          placeholderTextColor={COLORS.text.muted}
+          placeholderTextColor={colors.text.muted}
           autoCapitalize={props.autoCapitalize ?? 'none'}
         />
         {secureToggle && (
           <TouchableOpacity onPress={() => setShow((s) => !s)} style={styles.eye}>
-            <Text style={styles.eyeText}>{show ? '🙈' : '👁️'}</Text>
+            <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.text.muted} />
           </TouchableOpacity>
         )}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
-}
+});
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   wrapper: { marginBottom: 16 },
   label: {
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: COLORS.text.secondary,
+    color: c.text.secondary,
     marginBottom: 8,
   },
   inputRow: {
@@ -49,19 +63,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderRadius: RADIUS.lg,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     paddingHorizontal: 14,
   },
-  inputNormal: { borderColor: '#c7d2fe' },  // indigo-200
-  inputError: { borderColor: COLORS.error },
+  inputNormal: { borderColor: c.inputBorder },  // indigo-200
+  inputFocused: { borderColor: c.primary },
+  inputError: { borderColor: c.error },
+  leading: { marginRight: 10 },
   input: {
     flex: 1,
     height: 50,
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.text.primary,
+    color: c.text.primary,
   },
   eye: { padding: 6 },
   eyeText: { fontSize: 16 },
-  error: { fontSize: 12, color: COLORS.error, marginTop: 4, fontWeight: '500' },
+  error: { fontSize: 12, color: c.error, marginTop: 4, fontWeight: '500' },
 });

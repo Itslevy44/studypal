@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { RADIUS } from '../../constants';
+import { useTheme, useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 interface Props {
   label: string;
@@ -9,15 +11,17 @@ interface Props {
   style?: ViewStyle;
 }
 
-export function Badge({ label, color = '#4f46e5', bg = '#e0e7ff', style }: Props) {
+export function Badge({ label, color, bg, style }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
-    <View style={[styles.badge, { backgroundColor: bg }, style]}>
-      <Text style={[styles.text, { color }]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: bg ?? colors.primarySoft }, style]}>
+      <Text style={[styles.text, { color: color ?? colors.primary }]}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Palette) => StyleSheet.create({
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,

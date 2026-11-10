@@ -8,12 +8,15 @@ import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { GradientButton } from '../../components/ui/GradientButton';
-import { COLORS, RADIUS } from '../../constants';
+import { RADIUS } from '../../constants';
 import { api } from '../../lib/api';
+import { useThemedStyles } from '../../context/ThemeContext';
+import type { Palette } from '../../constants/theme';
 
 const YEARS = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'];
 
 export default function RegisterScreen() {
+  const styles = useThemedStyles(createStyles);
   const { register } = useAuth();
   const [universities, setUniversities] = useState<any[]>([]);
   const [campuses, setCampuses] = useState<any[]>([]);
@@ -89,9 +92,9 @@ export default function RegisterScreen() {
           <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
         ) : null}
 
-        <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Jane Doe" autoCapitalize="words" />
-        <Input label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@university.ac.ke" />
-        <Input label="Phone Number (M-Pesa)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 0712345678" />
+        <Input label="Full Name" icon="person-outline" value={fullName} onChangeText={setFullName} placeholder="Jane Doe" autoCapitalize="words" />
+        <Input label="Email Address" icon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@university.ac.ke" />
+        <Input label="Phone Number (M-Pesa)" icon="call-outline" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 0712345678" />
 
         {/* University picker */}
         <Text style={styles.label}>University</Text>
@@ -119,8 +122,8 @@ export default function RegisterScreen() {
           </Picker>
         </View>
 
-        <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry secureToggle placeholder="Min 6 characters" />
-        <Input label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry secureToggle placeholder="Repeat password" />
+        <Input label="Password" icon="lock-closed-outline" value={password} onChangeText={setPassword} secureTextEntry secureToggle placeholder="Min 6 characters" />
+        <Input label="Confirm Password" icon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry secureToggle placeholder="Repeat password" />
 
         <GradientButton label="Create Account" onPress={handleRegister} loading={loading} style={styles.btn} />
 
@@ -132,25 +135,25 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc' },
-  topBar: { height: 4, backgroundColor: COLORS.primary },
+const createStyles = (c: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.background },
+  topBar: { height: 4, backgroundColor: c.primary },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 48 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 32 },
-  logoBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  logoBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   logoSP: { color: '#fff', fontWeight: '900', fontSize: 16 },
-  appName: { fontSize: 18, fontWeight: '800', color: COLORS.text.primary },
-  appSub: { fontSize: 11, color: COLORS.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  heading: { fontSize: 26, fontWeight: '800', color: COLORS.text.primary, marginBottom: 6 },
-  sub: { fontSize: 14, color: COLORS.text.secondary, marginBottom: 24 },
-  errorBox: { backgroundColor: '#fef2f2', borderRadius: RADIUS.lg, borderWidth: 1, borderColor: '#fecaca', padding: 14, marginBottom: 18 },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: '600' },
-  label: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: COLORS.text.secondary, marginBottom: 8 },
-  pickerBox: { borderWidth: 2, borderColor: '#c7d2fe', borderRadius: RADIUS.lg, marginBottom: 16, backgroundColor: '#fff', overflow: 'hidden' },
+  appName: { fontSize: 18, fontWeight: '800', color: c.text.primary },
+  appSub: { fontSize: 11, color: c.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  heading: { fontSize: 26, fontWeight: '800', color: c.text.primary, marginBottom: 6 },
+  sub: { fontSize: 14, color: c.text.secondary, marginBottom: 24 },
+  errorBox: { backgroundColor: c.errorSoft, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: c.errorBorder, padding: 14, marginBottom: 18 },
+  errorText: { color: c.error, fontSize: 13, fontWeight: '600' },
+  label: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: c.text.secondary, marginBottom: 8 },
+  pickerBox: { borderWidth: 2, borderColor: c.inputBorder, borderRadius: RADIUS.lg, marginBottom: 16, backgroundColor: c.surface, overflow: 'hidden' },
   pickerDisabled: { opacity: 0.5 },
-  picker: { height: 50, color: COLORS.text.primary },
+  picker: { height: 50, color: c.text.primary },
   btn: { marginTop: 8, marginBottom: 20 },
   linkRow: { alignItems: 'center', marginBottom: 24 },
-  linkText: { fontSize: 14, color: COLORS.text.secondary },
-  link: { color: COLORS.primary, fontWeight: '700' },
+  linkText: { fontSize: 14, color: c.text.secondary },
+  link: { color: c.primary, fontWeight: '700' },
 });
