@@ -250,6 +250,10 @@ export default function MarketplaceScreen() {
         transactionDesc={`Purchase: ${mpesaTarget?.title ?? ''}`}
         defaultPhone={(user as any)?.phone ?? ''}
         onClose={() => setMpesaTarget(null)}
+        verify={async () => {
+          const data = await api.marketplace.items();
+          return !!data.items?.find((i: any) => i.id === mpesaTarget?.id && i.status === 'sold');
+        }}
         onSuccess={() => {
           // Persist sold status to backend immediately
           api.marketplace.items().then(() => loadData()).catch(() => {});

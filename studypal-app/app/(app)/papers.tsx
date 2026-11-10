@@ -197,6 +197,7 @@ export default function PapersScreen() {
         transactionDesc="StudyPal: 3-Month All-Access Pass"
         defaultPhone={(user as any)?.phone ?? ''}
         onClose={() => setMpesaTarget(null)}
+        verify={async () => !!(await refreshUser())?.hasActiveSubscription}
         onSuccess={() => { setMpesaTarget(null); refreshUser(); }}
       />
     </SafeAreaView>
