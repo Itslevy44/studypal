@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   View, Text, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -19,17 +19,30 @@ interface Props {
   defaultPhone?: string;
   onClose: () => void;
   onSuccess: () => void;
+  /** Resolves true once the payment has been recorded (e.g. refresh the user and check their subscription). */
+  verify?: () => Promise<boolean>;
 }
+
+const POLL_EVERY_MS = 4000;
+const POLL_ATTEMPTS = 25; // ~100 seconds for the customer to enter their PIN
 
 export function MpesaModal({
   visible, title, amount, accountReference, transactionDesc,
-  defaultPhone = '', onClose, onSuccess,
+  defaultPhone = '', onClose, onSuccess, verify,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [phone, setPhone] = useState(defaultPhone);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'waiting' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const alive = useRef(true);
+  const runId = useRef(0); // bumped on each payment attempt and on close, so stale polling stops
+  const later = (fn: () => void, ms: number) => { timers.current.push(setTimeout(fn, ms)); };
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; timers.current.forEach(clearTimeout); };
+  }, []);
 
   const handlePay = async () => {
     if (!phone.trim()) {
@@ -37,17 +50,35 @@ export function MpesaModal({
       setMessage('Please enter your M-Pesa phone number.');
       return;
     }
+    const myRun = ++runId.current;
     setStatus('loading');
     setMessage('');
     try {
       await api.mpesa.stkPush({ phoneNumber: phone, amount, accountReference, transactionDesc });
-      setStatus('success');
-      setMessage('STK push sent. Enter your M-Pesa PIN on your phone to complete.');
-      setTimeout(() => {
-        setStatus('idle');
-        setMessage('');
-        onSuccess();
-      }, 3500);
+      if (!verify) {
+        setStatus('success');
+        setMessage('STK push sent. Enter your M-Pesa PIN on your phone to complete.');
+        later(() => { setStatus('idle'); setMessage(''); onSuccess(); }, 3500);
+        return;
+      }
+      setStatus('waiting');
+      setMessage('Check your phone and enter your M-Pesa PIN. We will confirm automatically.');
+      for (let i = 0; i < POLL_ATTEMPTS && alive.current && runId.current === myRun; i++) {
+        await new Promise((r) => later(() => r(null), POLL_EVERY_MS));
+        if (!alive.current || runId.current !== myRun) return;
+        await api.mpesa.reconcile().catch(() => {}); // ask PayHero directly; webhook may be late
+        const paid = await verify().catch(() => false);
+        if (paid && runId.current === myRun) {
+          setStatus('success');
+          setMessage('Payment confirmed. Thank you!');
+          later(() => { setStatus('idle'); setMessage(''); onSuccess(); }, 1200);
+          return;
+        }
+      }
+      if (alive.current && runId.current === myRun) {
+        setStatus('error');
+        setMessage("We haven't received the payment yet. If you already paid, it can take a minute: pull down to refresh, or try again.");
+      }
     } catch (e: any) {
       setStatus('error');
       setMessage(e.message || 'Payment initiation failed. Try again.');
@@ -56,6 +87,7 @@ export function MpesaModal({
 
   const handleClose = () => {
     if (status === 'loading') return;
+    runId.current++; // stop any in-flight confirmation polling
     setStatus('idle');
     setMessage('');
     onClose();
@@ -102,7 +134,7 @@ export function MpesaModal({
               status === 'error' ? styles.statusError :
               status === 'success' ? styles.statusSuccess : styles.statusInfo,
             ]}>
-              {status === 'loading' && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />}
+              {(status === 'loading' || status === 'waiting') && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />}
               <Text style={[
                 styles.statusText,
                 status === 'error' ? { color: colors.error } :
@@ -113,10 +145,10 @@ export function MpesaModal({
 
           <View style={styles.actions}>
             <GradientButton
-              label={status === 'loading' ? 'Sending…' : `Pay KES ${amount}`}
+              label={status === 'loading' ? 'Sending…' : status === 'waiting' ? 'Waiting for payment…' : `Pay KES ${amount}`}
               onPress={handlePay}
-              loading={status === 'loading'}
-              disabled={status === 'success'}
+              loading={status === 'loading' || status === 'waiting'}
+              disabled={status === 'success' || status === 'waiting'}
               style={{ flex: 1 }}
             />
             <TouchableOpacity

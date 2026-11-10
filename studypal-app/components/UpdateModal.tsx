@@ -4,7 +4,7 @@ import {
   Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
 import { RADIUS, SHADOW } from '../constants';
-import { UpdateInfo } from '../hooks/useUpdateChecker';
+import { UpdateInfo } from '../lib/useUpdateChecker';
 import { useTheme, useThemedStyles } from '../context/ThemeContext';
 import type { Palette } from '../constants/theme';
 

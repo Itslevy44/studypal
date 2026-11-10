@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
@@ -34,6 +35,7 @@ export default function AppLayout() {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { user, loading } = useAuth();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { updateAvailable, updateInfo, dismissUpdate, openDownload } = useUpdateChecker();
 
@@ -60,7 +62,7 @@ export default function AppLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.text.muted,
-          tabBarStyle: styles.tabBar,
+          tabBarStyle: [styles.tabBar, { height: 56 + Math.max(insets.bottom, 8), paddingBottom: Math.max(insets.bottom, 8) }],
           tabBarLabelStyle: styles.tabLabel,
         }}
       >

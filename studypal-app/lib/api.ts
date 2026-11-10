@@ -1,9 +1,16 @@
 import { API_BASE_URL } from '../constants';
 import { storage } from './storage';
-import * as Application from 'expo-application';
+import { getDeviceId } from './device';
 
-async function getDeviceId(): Promise<string> {
-  return Application.getAndroidId() || 'unknown';
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/** Registered by AuthContext so an expired/revoked session signs the user out everywhere. */
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null) { onUnauthorized = fn; }
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
 }
 
 async function request<T>(
@@ -20,19 +27,36 @@ async function request<T>(
     const token = await storage.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
     // Always send device ID on authenticated requests so the server can verify the session
-    const deviceId = await getDeviceId();
-    if (deviceId) headers['X-Device-Id'] = deviceId;
+    headers['X-Device-Id'] = await getDeviceId();
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const data = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (e: any) {
+    throw new ApiError(
+      e?.name === 'AbortError'
+        ? 'The server took too long to respond. Please try again.'
+        : "Can't reach the server. Check your internet connection.",
+      0
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // Gateways (502/504 pages) can return HTML; never surface a raw JSON parse error.
+  let data: any = null;
+  try { data = await response.json(); } catch { /* non-JSON body */ }
 
   if (!response.ok) {
-    throw new Error(data?.error || `Request failed: ${response.status}`);
+    if (response.status === 401 && authenticated) onUnauthorized?.();
+    throw new ApiError(
+      data?.error || (response.status >= 500 ? 'Server error. Please try again shortly.' : `Request failed (${response.status})`),
+      response.status
+    );
   }
 
   return data as T;
@@ -54,6 +78,7 @@ export const api = {
       university: string;
       campus: string;
       yearOfStudy: string;
+      phone?: string;
     }) =>
       request<{ token: string; user: any }>('/api/auth/register', {
         method: 'POST',
@@ -105,6 +130,12 @@ export const api = {
       request<{ success: boolean; data: any }>('/api/mpesa/stkpush', {
         method: 'POST',
         body: JSON.stringify(payload),
+      }, true),
+
+    /** Asks the server to check PayHero for this user's pending payments (covers a late or lost webhook). */
+    reconcile: () =>
+      request<{ success: boolean; settled: number; pending: number }>('/api/payhero/reconcile', {
+        method: 'POST',
       }, true),
   },
 

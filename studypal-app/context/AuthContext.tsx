@@ -1,13 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import * as Application from 'expo-application';
 import { storage } from '../lib/storage';
-import { api } from '../lib/api';
-
-// Stable device identifier — unique per app install on Android
-async function getDeviceId(): Promise<string> {
-  const androidId = Application.getAndroidId();
-  return androidId || `device_${Math.random().toString(36).slice(2)}`;
-}
+import { api, setUnauthorizedHandler } from '../lib/api';
+import { getDeviceId } from '../lib/device';
 
 interface User {
   id: string;
@@ -29,7 +23,7 @@ interface AuthContextValue {
     university: string; campus: string; yearOfStudy: string; phone?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -80,12 +74,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const refreshUser = useCallback(async () => {
+  // Any authenticated request that comes back 401 (expired or revoked token) signs the user out.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      storage.clearAuth().finally(() => { setToken(null); setUser(null); });
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  const refreshUser = useCallback(async (): Promise<User | null> => {
     try {
       const data = await api.auth.me();
       if (data.success && data.user) {
         await storage.setUser(data.user);
         setUser(data.user);
+        return data.user;
       }
     } catch (e: any) {
       // If server says session is on another device, force logout immediately
@@ -96,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       // Other errors: silently fail — stale data is fine
     }
+    return null;
   }, []);
 
   return (

@@ -18,7 +18,11 @@ export function usePaperActions() {
   const download = useCallback(async (paper: any) => {
     setProgress((p) => ({ ...p, [paper.id]: 0 }));
     try {
-      await downloadPaper(paper, (f) => setProgress((p) => ({ ...p, [paper.id]: f })));
+      let last = 0;
+      await downloadPaper(paper, (f) => {
+        // ~5% steps: avoids re-rendering the whole list on every network chunk
+        if (f - last >= 0.05 || f >= 1) { last = f; setProgress((p) => ({ ...p, [paper.id]: f })); }
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       toast.show(`Saved "${paper.title || paper.course}" for offline use`, 'success');
       refreshDownloaded();

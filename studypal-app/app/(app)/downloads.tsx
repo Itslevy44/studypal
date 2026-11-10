@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { recordOpened } from '../../lib/downloads';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
   RefreshControl, Alert, ActivityIndicator,
@@ -173,7 +175,17 @@ export default function DownloadsScreen() {
     setRefreshing(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Reload every time the tab is shown, so papers downloaded elsewhere appear immediately
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Deep link from Home ("Continue studying"): open that paper once the list is loaded
+  const { open: openId } = useLocalSearchParams<{ open?: string }>();
+  const handledOpen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || handledOpen.current === openId || papers.length === 0) return;
+    const match = papers.find((p) => p.id === openId);
+    if (match) { handledOpen.current = openId; openPaper(match); }
+  }, [openId, papers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalSize = useMemo(() => papers.reduce((n, p) => n + (p.size || 0), 0), [papers]);
   const filtered = useMemo(() => {
@@ -182,6 +194,7 @@ export default function DownloadsScreen() {
   }, [papers, query]);
 
   const openPaper = async (paper: DownloadedPaper) => {
+    recordOpened(paper.id);
     setPdfLoading(true);
     setViewing(paper);
     try {
