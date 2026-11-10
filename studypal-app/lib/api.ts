@@ -131,6 +131,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }, true),
+
+    /** Asks the server to check PayHero for this user's pending payments (covers a late or lost webhook). */
+    reconcile: () =>
+      request<{ success: boolean; settled: number; pending: number }>('/api/payhero/reconcile', {
+        method: 'POST',
+      }, true),
   },
 
   // ── Marketplace ─────────────────────────────────────────────────────────────

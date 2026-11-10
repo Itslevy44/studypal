@@ -66,6 +66,7 @@ export function MpesaModal({
       for (let i = 0; i < POLL_ATTEMPTS && alive.current && runId.current === myRun; i++) {
         await new Promise((r) => later(() => r(null), POLL_EVERY_MS));
         if (!alive.current || runId.current !== myRun) return;
+        await api.mpesa.reconcile().catch(() => {}); // ask PayHero directly; webhook may be late
         const paid = await verify().catch(() => false);
         if (paid && runId.current === myRun) {
           setStatus('success');
